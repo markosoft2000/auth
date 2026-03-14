@@ -13,6 +13,7 @@ type Config struct {
 	HTTPServer  HTTPServerConfig `yaml:"http_server"`
 	GRPC        GRPCConfig       `yaml:"grpc"`
 	TokenTTL    time.Duration    `yaml:"token_ttl" env-default:"1h"`
+	Hasher      HasherConfig     `yaml:"hasher"`
 }
 
 type HTTPServerConfig struct {
@@ -26,6 +27,14 @@ type HTTPServerConfig struct {
 type GRPCConfig struct {
 	Port    int           `yaml:"port"`
 	Timeout time.Duration `yaml:"timeout"`
+}
+
+type HasherConfig struct {
+	Memory      uint32 `yaml:"memory" env-default:"65536"` // 64MB
+	Iterations  uint32 `yaml:"iterations" env-default:"3"`
+	Parallelism uint8  `yaml:"parallelism" env-default:"2"`
+	SaltLength  uint32 `yaml:"salt_length" env-default:"16"`
+	KeyLength   uint32 `yaml:"key_length" env-default:"32"`
 }
 
 func MustLoad() *Config {

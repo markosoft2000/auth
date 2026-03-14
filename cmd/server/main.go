@@ -14,6 +14,7 @@ import (
 	grpcapp "github.com/markosoft2000/auth/internal/app"
 	"github.com/markosoft2000/auth/internal/config"
 	"github.com/markosoft2000/auth/internal/http-server/handlers/health"
+	"github.com/markosoft2000/auth/internal/service/auth"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -48,7 +49,16 @@ func main() {
 		IdleTimeout:  time.Duration(cfg.HTTPServer.IdleTimeout) * time.Second,
 	}
 
-	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL)
+	authServiceCfg := auth.AuthConfig{
+		Memory:      cfg.Hasher.Memory,
+		Iterations:  cfg.Hasher.Iterations,
+		Parallelism: cfg.Hasher.Parallelism,
+		SaltLength:  cfg.Hasher.SaltLength,
+		KeyLength:   cfg.Hasher.KeyLength,
+		TokenTTL:    cfg.TokenTTL,
+	}
+
+	grpcApp := grpcapp.New(log, cfg.GRPC.Port, authServiceCfg)
 	go func() {
 		grpcApp.GRPCServer.MustRun()
 	}()

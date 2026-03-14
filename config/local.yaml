@@ -3,10 +3,16 @@ storage_path: "./storage/auth.db"
 http_server:
   address: "localhost:8081"
   timeout: 3
-  read_timeout:  5
+  read_timeout: 5
   write_timeout: 10
-  idle_timeout:  120
+  idle_timeout: 120
 grpc:
   port: 44044
   timeout: 5s
 token_ttl: 1h
+hasher:
+  memory: 65536
+  iterations: 3
+  parallelism: 2
+  salt_length: 16
+  key_length: 32

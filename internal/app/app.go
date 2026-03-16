@@ -2,6 +2,7 @@ package app
 
 import (
 	"log/slog"
+	"time"
 
 	grpcapp "github.com/markosoft2000/auth/internal/app/grpc"
 	"github.com/markosoft2000/auth/internal/service/auth"
@@ -14,10 +15,13 @@ type App struct {
 func New(
 	log *slog.Logger,
 	grpcPort int,
-	authServiceCfg auth.AuthConfig,
+	tokenTTL time.Duration,
+	hasher auth.Hasher,
+	userSaver auth.UserSaver,
+	userProvider auth.UserProvider,
+	appProvider auth.AppProvider,
 ) *App {
-
-	authService := auth.New(log, authServiceCfg)
+	authService := auth.New(log, tokenTTL, hasher, userSaver, userProvider, appProvider)
 	grpcApp := grpcapp.New(log, grpcPort, authService)
 
 	return &App{

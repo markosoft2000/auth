@@ -9,14 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	grpcapp "github.com/markosoft2000/auth/internal/app"
 	"github.com/markosoft2000/auth/internal/config"
-	"github.com/markosoft2000/auth/internal/http-server/handlers/health"
 	"github.com/markosoft2000/auth/internal/lib/hasher/argon2"
+	"github.com/markosoft2000/auth/internal/routes"
 	"github.com/markosoft2000/auth/internal/storage"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -30,18 +27,9 @@ func main() {
 
 	log := setupLogger(cfg.Env)
 
-	// Router Initialization
-	r := chi.NewRouter()
+	r := routes.NewRouter(log, cfg.HTTPServer.Timeout)
 
-	// Panic Recovery (Chi's built-in middleware)
-	// This ensures the service doesn't crash on a panic and logs the stack trace.
-	r.Use(middleware.Timeout(time.Duration(cfg.HTTPServer.Timeout) * time.Second))
-	r.Use(middleware.Recoverer)
-
-	r.Handle("/metrics", promhttp.Handler())
-	r.Get("/health", health.New(log)) // Health Check endpoint
-
-	// Server Configuration
+	// HTTP Server Configuration
 	srv := &http.Server{
 		Addr:         cfg.HTTPServer.Address,
 		Handler:      r,
@@ -50,6 +38,16 @@ func main() {
 		IdleTimeout:  time.Duration(cfg.HTTPServer.IdleTimeout) * time.Second,
 	}
 
+	go func() {
+		log.Info("http server starting", slog.String("addr", cfg.HTTPServer.Address))
+
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("http server failed", slog.Any("error", err))
+			os.Exit(1)
+		}
+	}()
+
+	// GRPC Server Configuration
 	hasher := argon2.New(
 		cfg.Hasher.Memory,
 		cfg.Hasher.Iterations,
@@ -61,6 +59,7 @@ func main() {
 	storage := storage.NewMockStorage()
 
 	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL, hasher, storage, storage, storage)
+
 	go func() {
 		grpcApp.GRPCServer.MustRun()
 	}()
@@ -68,14 +67,6 @@ func main() {
 	// Graceful Shutdown Setup
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	go func() {
-		log.Info("http server starting", slog.String("addr", cfg.HTTPServer.Address))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error("http server failed", slog.Any("error", err))
-			os.Exit(1)
-		}
-	}()
 
 	// Wait for SIGINT or SIGTERM
 	<-ctx.Done()
@@ -86,8 +77,10 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error("forced shutdown", "error", err)
+		log.Error("forced shutdown http server", "error", err)
 	}
+
+	grpcApp.GRPCServer.Stop()
 
 	log.Info("server stopped")
 }

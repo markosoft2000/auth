@@ -7,5 +7,5 @@ http_server:
   write_timeout: 10
   idle_timeout:  120
 grpc:
-  port: 44044
-  timeout: 5s
+  port: 50001
+  timeout: 10s

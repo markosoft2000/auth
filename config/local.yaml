@@ -7,7 +7,7 @@ http_server:
   write_timeout: 10
   idle_timeout: 120
 grpc:
-  port: 44044
+  port: 50001
   timeout: 5s
 token_ttl: 1h
 hasher:

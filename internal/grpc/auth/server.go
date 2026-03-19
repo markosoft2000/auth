@@ -44,14 +44,6 @@ func Register(gRPC *grpc.Server, auth Auth) {
 }
 
 func (s *serverAPI) Register(ctx context.Context, req *authv1.RegisterRequest) (*authv1.RegisterResponse, error) {
-	if req.GetEmail() == "" {
-		return nil, status.Error(codes.InvalidArgument, "email is required")
-	}
-
-	if req.GetPassword() == "" {
-		return nil, status.Error(codes.InvalidArgument, "password is required")
-	}
-
 	userID, err := s.auth.RegisterNewUser(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, storage.ErrUserExists) {

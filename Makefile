@@ -6,3 +6,6 @@ migrate-down: ## Database migration down
 
 run:
 	-@go run cmd/server/main.go
+
+gen-proto:
+	@buf dep update && buf generate

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package auth;
 
+import "buf/validate/validate.proto";
+
 option go_package = "markosoft2000.auth.v1;authv1";
 
 service Auth {
@@ -11,8 +13,30 @@ service Auth {
 }
 
 message RegisterRequest {
-  string email = 1;    // Add @validation: email
-  string password = 2; // Add @validation: min_len 8
+  // string email = 1 [(buf.validate.field).string.email = true];
+  // string password = 2 [
+  //   (buf.validate.field).string.min_len = 8,
+  //   (buf.validate.field).string.max_len = 72
+  // ];
+  string email = 1 [
+    (buf.validate.field).string.max_len = 100,
+    (buf.validate.field).cel = {
+      id: "email_format",
+      message: "invalid email format: must be a valid public email address (e.g. user@example.com)",
+      // This regex requires at least one dot in the domain part
+      expression: "this.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}$')"
+    }
+  ];
+  string password = 2 [
+    (buf.validate.field).string.min_len = 8,
+    (buf.validate.field).string.max_len = 72,
+    (buf.validate.field).cel = {
+      id: "password_complexity",
+      message: "password must contain uppercase, lowercase, digit, and special character",
+      // CEL logic: Check each condition individually
+      expression: "this.matches('[A-Z]') && this.matches('[a-z]') && this.matches('[0-9]') && this.matches('[!@#$%^&*()_+]')"
+    }
+  ];
 }
 
 message RegisterResponse {

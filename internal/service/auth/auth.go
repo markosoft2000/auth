@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/markosoft2000/auth/internal/domain/models"
+	"github.com/markosoft2000/auth/internal/lib/jwt"
 	"github.com/markosoft2000/auth/internal/storage"
 )
 
@@ -139,10 +140,14 @@ func (a *Auth) Login(
 
 	log.Info("user logged in successfully")
 
-	// TODO: Generate JWT using app.Secret and user.ID
-	token := "token-for-app-" + app.Name
+	accessToken, err := jwt.GenerateToken(*user, *app, a.tokenTTL)
+	if err != nil {
+		a.log.Error("failed to generate accessToken", slog.Any("error", err))
 
-	return token, nil
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	return accessToken, nil
 }
 
 func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {

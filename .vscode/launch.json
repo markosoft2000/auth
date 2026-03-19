@@ -12,7 +12,7 @@
             "program": "${workspaceFolder}/cmd/server/main.go",
             "cwd": "${workspaceFolder}",
             "env": {
-                "CONFIG_PATH": "./config/local.yaml"
+                "CONFIG_PATH": "./configs/local.yaml"
             }
         }
     ]

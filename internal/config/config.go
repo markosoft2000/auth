@@ -8,12 +8,12 @@ import (
 )
 
 type Config struct {
-	Env         string           `yaml:"env" env:"ENV" env-default:"local"`
-	StoragePath string           `yaml:"storage_path" env:"STORAGE_PATH" env-required:"true"`
-	HTTPServer  HTTPServerConfig `yaml:"http_server"`
-	GRPC        GRPCConfig       `yaml:"grpc"`
-	TokenTTL    time.Duration    `yaml:"token_ttl" env-default:"1h"`
-	Hasher      HasherConfig     `yaml:"hasher"`
+	Env        string           `yaml:"env" env:"ENV" env-default:"local"`
+	Postgres   PostgresConfig   `yaml:"postgres"`
+	HTTPServer HTTPServerConfig `yaml:"http_server"`
+	GRPC       GRPCConfig       `yaml:"grpc"`
+	TokenTTL   time.Duration    `yaml:"token_ttl" env-default:"1h"`
+	Hasher     HasherConfig     `yaml:"hasher"`
 }
 
 type HTTPServerConfig struct {
@@ -35,6 +35,15 @@ type HasherConfig struct {
 	Parallelism uint8  `yaml:"parallelism" env-default:"2"`
 	SaltLength  uint32 `yaml:"salt_length" env-default:"16"`
 	KeyLength   uint32 `yaml:"key_length" env-default:"32"`
+}
+
+type PostgresConfig struct {
+	Host     string `yaml:"host" env:"DB_HOST" env-default:"localhost"`
+	Port     int    `yaml:"port" env:"DB_PORT" env-default:"5432"`
+	User     string `yaml:"user" env:"DB_USER" env-required:"true"`
+	Password string `yaml:"password" env:"DB_PASSWORD" env-required:"true"`
+	Database string `yaml:"database" env:"DB_NAME" env-required:"true"`
+	SSLMode  string `yaml:"ssl_mode" env-default:"disable"`
 }
 
 func MustLoad() *Config {

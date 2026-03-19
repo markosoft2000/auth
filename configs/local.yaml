@@ -9,10 +9,17 @@ http_server:
 grpc:
   port: 50001
   timeout: 5s
-token_ttl: 1h
+token_ttl: 15m
 hasher:
   memory: 65536
   iterations: 3
   parallelism: 2
   salt_length: 16
   key_length: 32
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "example"
+  database: "auth_db"
+  ssl_mode: "disable"

@@ -1,0 +1,25 @@
+env: "local"
+storage_path: "./storage/auth.db"
+http_server:
+  address: "localhost:8081"
+  timeout: 3
+  read_timeout:  5
+  write_timeout: 10
+  idle_timeout:  120
+grpc:
+  port: 50001
+  timeout: 10s
+token_ttl: 15m
+hasher:
+  memory: 65536
+  iterations: 3
+  parallelism: 2
+  salt_length: 16
+  key_length: 32
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "example"
+  database: "auth_db"
+  ssl_mode: "disable"

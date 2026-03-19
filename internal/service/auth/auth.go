@@ -34,6 +34,8 @@ type AppProvider interface {
 
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserExists         = errors.New("user already exists")
+	ErrAppNotFound        = errors.New("app not found")
 )
 
 type Auth struct {
@@ -82,6 +84,12 @@ func (a *Auth) RegisterNewUser(
 
 	id, err := a.userSaver.SaveUser(ctx, email, passHash)
 	if err != nil {
+		if errors.Is(err, storage.ErrUserExists) {
+			log.Error("user exists", slog.Any("error", err))
+
+			return 0, fmt.Errorf("%s: %w", op, ErrUserExists)
+		}
+
 		log.Error("failed to save user", slog.Any("error", err))
 
 		return 0, fmt.Errorf("%s: %w", op, err)
@@ -121,7 +129,9 @@ func (a *Auth) Login(
 	app, err := a.appProvider.App(ctx, appID)
 	if err != nil {
 		if errors.Is(err, storage.ErrAppNotFound) {
-			return "", fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
+			log.Error("app not found", slog.Any("error", err))
+
+			return "", fmt.Errorf("%s: %w", op, ErrAppNotFound)
 		}
 
 		return "", fmt.Errorf("%s: %w", op, err)

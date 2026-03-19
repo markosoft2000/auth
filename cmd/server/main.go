@@ -13,7 +13,7 @@ import (
 	"github.com/markosoft2000/auth/internal/config"
 	"github.com/markosoft2000/auth/internal/lib/hasher/argon2"
 	"github.com/markosoft2000/auth/internal/routes"
-	"github.com/markosoft2000/auth/internal/storage"
+	"github.com/markosoft2000/auth/internal/storage/postgres"
 )
 
 const (
@@ -37,13 +37,11 @@ func main() {
 		WriteTimeout: time.Duration(cfg.HTTPServer.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(cfg.HTTPServer.IdleTimeout) * time.Second,
 	}
-
 	go func() {
 		log.Info("http server starting", slog.String("addr", cfg.HTTPServer.Address))
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("http server failed", slog.Any("error", err))
-			os.Exit(1)
 		}
 	}()
 
@@ -56,10 +54,20 @@ func main() {
 		cfg.Hasher.KeyLength,
 	)
 
-	storage := storage.NewMockStorage()
+	storage, err := postgres.New(
+		cfg.Postgres.Host,
+		cfg.Postgres.Port,
+		cfg.Postgres.User,
+		cfg.Postgres.Password,
+		cfg.Postgres.Database,
+		cfg.Postgres.SSLMode,
+	)
+	if err != nil {
+		log.Error("failed to init storage", slog.Any("error", err))
+		os.Exit(1)
+	}
 
 	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL, hasher, storage, storage, storage)
-
 	go func() {
 		grpcApp.GRPCServer.MustRun()
 	}()
@@ -81,6 +89,8 @@ func main() {
 	}
 
 	grpcApp.GRPCServer.Stop()
+
+	storage.Stop()
 
 	log.Info("server stopped")
 }

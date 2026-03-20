@@ -1,11 +1,11 @@
 CREATE TABLE IF NOT EXISTS apps (
-    id     INTEGER PRIMARY KEY,
+    id     SERIAL PRIMARY KEY,
     name   TEXT NOT NULL UNIQUE,
     secret TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS users (
-    id        INTEGER PRIMARY KEY,
+    id        BIGSERIAL PRIMARY KEY,
     email     TEXT NOT NULL UNIQUE,
     pass_hash TEXT NOT NULL,
     is_admin  BOOLEAN NOT NULL DEFAULT FALSE

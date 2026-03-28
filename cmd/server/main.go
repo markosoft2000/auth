@@ -13,6 +13,7 @@ import (
 	"github.com/markosoft2000/auth/internal/config"
 	"github.com/markosoft2000/auth/internal/lib/hasher/argon2"
 	"github.com/markosoft2000/auth/internal/routes"
+	"github.com/markosoft2000/auth/internal/service/auth"
 	"github.com/markosoft2000/auth/internal/storage/postgres"
 )
 
@@ -54,7 +55,7 @@ func main() {
 		cfg.Hasher.KeyLength,
 	)
 
-	storage, err := postgres.New(
+	pgStorage, err := postgres.New(
 		cfg.Postgres.Host,
 		cfg.Postgres.Port,
 		cfg.Postgres.User,
@@ -67,7 +68,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL, hasher, storage, storage, storage)
+	storage := auth.Storage{
+		UserSaver:    pgStorage,
+		UserProvider: pgStorage,
+		AppProvider:  pgStorage,
+	}
+
+	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL, hasher, storage)
 	go func() {
 		grpcApp.GRPCServer.MustRun()
 	}()
@@ -90,7 +97,7 @@ func main() {
 
 	grpcApp.GRPCServer.Stop()
 
-	storage.Stop()
+	pgStorage.Stop()
 
 	log.Info("server stopped")
 }

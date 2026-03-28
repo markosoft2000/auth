@@ -7,6 +7,10 @@ CREATE TABLE IF NOT EXISTS apps (
 CREATE TABLE IF NOT EXISTS users (
     id        BIGSERIAL PRIMARY KEY,
     email     TEXT NOT NULL UNIQUE,
-    pass_hash TEXT NOT NULL,
+    pass_hash TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admins (
+    id        BIGINT PRIMARY KEY,
     is_admin  BOOLEAN NOT NULL DEFAULT FALSE
 );

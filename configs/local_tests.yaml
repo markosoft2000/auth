@@ -21,5 +21,5 @@ postgres:
   port: 5432
   user: "postgres"
   password: "example"
-  database: "auth_db"
+  database: "auth_db_test"
   ssl_mode: "disable"

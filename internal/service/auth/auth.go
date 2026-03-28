@@ -17,6 +17,12 @@ type Hasher interface {
 	ComparePassword(hash, password string) bool
 }
 
+type Storage struct {
+	UserProvider UserProvider
+	UserSaver    UserSaver
+	AppProvider  AppProvider
+}
+
 // UserProvider handles User-related reads
 type UserProvider interface {
 	User(ctx context.Context, email string) (*models.User, error)
@@ -53,17 +59,15 @@ func New(
 	log *slog.Logger,
 	tokenTTL time.Duration,
 	hasher Hasher,
-	userSaver UserSaver,
-	userProvider UserProvider,
-	appProvider AppProvider,
+	storage Storage,
 ) *Auth {
 	return &Auth{
 		log:          log,
 		tokenTTL:     tokenTTL,
 		hasher:       hasher,
-		userSaver:    userSaver,
-		userProvider: userProvider,
-		appProvider:  appProvider,
+		userSaver:    storage.UserSaver,
+		userProvider: storage.UserProvider,
+		appProvider:  storage.AppProvider,
 	}
 }
 

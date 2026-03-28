@@ -62,12 +62,12 @@ func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	const op = "storage.postgres.IsAdmin"
 
 	var isAdmin bool
-	query := "SELECT is_admin FROM users WHERE id = $1"
+	query := "SELECT is_admin FROM admins WHERE id = $1"
 
 	err := s.pool.QueryRow(ctx, query, userID).Scan(&isAdmin)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return false, fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
+			return false, nil
 		}
 
 		return false, fmt.Errorf("%s: %w", op, err)

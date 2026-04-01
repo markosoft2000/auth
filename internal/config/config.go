@@ -1,7 +1,9 @@
 package config
 
 import (
+	"flag"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -46,11 +48,20 @@ type PostgresConfig struct {
 	SSLMode  string `yaml:"ssl_mode" env-default:"disable"`
 }
 
+var once sync.Once
+
 func MustLoad() *Config {
-	// You can optionally check for a config file path via env or flag
-	configPath := os.Getenv("CONFIG_PATH")
+	var configPath string
+	once.Do(func() {
+		flag.StringVar(&configPath, "config", "", "path to config file")
+		flag.Parse()
+	})
+
 	if configPath == "" {
-		panic("CONFIG_PATH is not set")
+		configPath = os.Getenv("CONFIG_PATH")
+		if configPath == "" {
+			panic("CONFIG_PATH is not set")
+		}
 	}
 
 	// Check if file exists

@@ -3,9 +3,9 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -14,9 +14,19 @@ import (
 )
 
 func main() {
+	var migrationsPath string
+	flag.StringVar(&migrationsPath, "migrations-path", "migrations", "path to migrations folder")
+	flag.Parse()
+
+	// Validate command argument (up/down)
+	if len(flag.Args()) == 0 {
+		log.Fatal("error: must specify a command (up or down)")
+	}
+	cmd := flag.Arg(0)
+
 	dbcfg := config.MustLoad().Postgres
 
-	log.Println("Starting database migration process")
+	log.Printf("Starting database migration process (path: %s)", migrationsPath)
 
 	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		dbcfg.User,
@@ -44,7 +54,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	switch os.Args[len(os.Args)-1] {
+	switch cmd {
 	case "up":
 		if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 			log.Fatalf("Migration up failed: %v", err)

@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/markosoft2000/auth/internal/service/auth"
-	"github.com/markosoft2000/auth/internal/storage"
 	authv1 "github.com/markosoft2000/auth/pkg/gen/grpc/auth/sso"
 
 	"google.golang.org/grpc"
@@ -46,7 +45,7 @@ func Register(gRPC *grpc.Server, auth Auth) {
 func (s *serverAPI) Register(ctx context.Context, req *authv1.RegisterRequest) (*authv1.RegisterResponse, error) {
 	userID, err := s.auth.RegisterNewUser(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
-		if errors.Is(err, storage.ErrUserExists) {
+		if errors.Is(err, auth.ErrUserExists) {
 			return nil, status.Error(codes.AlreadyExists, "user already exists")
 		}
 
@@ -88,7 +87,7 @@ func (s *serverAPI) IsAdmin(ctx context.Context, req *authv1.IsAdminRequest) (*a
 
 	isAdmin, err := s.auth.IsAdmin(ctx, req.GetUserId())
 	if err != nil {
-		if errors.Is(err, storage.ErrUserNotFound) {
+		if errors.Is(err, auth.ErrUserNotFound) {
 			return nil, status.Error(codes.NotFound, "user not found")
 		}
 

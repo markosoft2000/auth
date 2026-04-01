@@ -1,14 +1,13 @@
 env: "local"
-storage_path: "./storage/auth.db"
 http_server:
   address: "localhost:8081"
   timeout: 3
-  read_timeout:  5
+  read_timeout: 5
   write_timeout: 10
-  idle_timeout:  120
+  idle_timeout: 120
 grpc:
   port: 50001
-  timeout: 10s
+  timeout: 5s
 token_ttl: 15m
 hasher:
   memory: 65536
@@ -21,5 +20,5 @@ postgres:
   port: 5432
   user: "postgres"
   password: "example"
-  database: "auth_db_test"
+  database: "auth_db"
   ssl_mode: "disable"

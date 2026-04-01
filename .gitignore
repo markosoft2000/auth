@@ -1,5 +1,9 @@
 # Binary builds
 bin/
 
+# Configuration (Never commit your real .yaml file)
+configs/local.yaml
+configs/local_tests.yaml
+
 # Keep the example/template version
 !configs/local.example.yaml

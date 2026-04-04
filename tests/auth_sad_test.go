@@ -49,11 +49,10 @@ func TestRegister_EmptyPassword(t *testing.T) {
 		Password: "",
 	})
 
-	// Assertions: Validation should catch this
+	// Assertions
 	st.T.Logf("Received error: %v", err)
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-
 	assert.Contains(t, err.Error(), "password")
 	assert.Contains(t, err.Error(), "validation errors")
 }
@@ -82,6 +81,5 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 	st.T.Logf("Received error: %v", err)
 	require.Error(t, err)
 	assert.Empty(t, respLogin.GetToken())
-
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }

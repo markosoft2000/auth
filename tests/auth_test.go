@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -14,9 +15,17 @@ import (
 )
 
 const (
-	emptyAppID = 0
-	appID      = 1
-	appSecret  = "testSecret"
+	emptyAppID   = 0
+	appID        = 1
+	appPublicKey = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlSJajhzgYWK7Ve/xLiAU
+loq5+PeGTSZf+/YMXLH/caZeoGvWPFIcWuM8kW1W/USbqZx/O0sQnYCXPFof0Tu5
+5sefNrXItqVgw61Qmvgzli5DjKHZIf339LElM3dOzrOKGFwqOI/WXs5TBcNQ5a8a
+zV8WQE8j/+wZsMcqLqUALMM7l+JBAEGw3oy8RxEmLzhQ6EhpMxjGr9/ztJALBwbt
+7BNjdxOz/kTO7++rgbz99fvQ+59PpR5ZmsmVS8yhHRZWszO+9qGbYW2X7gj/vWqL
+1Tpg21vys/yV8L3dEcXgaLzQ7YfdQClWZD0M2AbgwHAoQh6vy6hGV0GYmw7n7HOL
+JwIDAQAB
+-----END PUBLIC KEY-----`
 )
 
 func TestRegister_HappyPath(t *testing.T) {
@@ -59,20 +68,15 @@ func TestLogin_HappyPath(t *testing.T) {
 		AppId:    appID,
 	})
 
-	// 3. Verify Token
 	require.NoError(t, err)
 	assert.NotEmpty(t, respLogin.GetToken())
 
-	// 4. Token Validation
-	tokenParsed, err := jwt.Parse(respLogin.GetToken(), func(token *jwt.Token) (interface{}, error) {
-		return []byte(appSecret), nil
-	})
+	// 3. Verify Token
+	tokenClaims, err := validateToken(respLogin.GetToken(), appPublicKey)
 	require.NoError(t, err)
+	claims := tokenClaims.(jwt.MapClaims)
 
-	claims, ok := tokenParsed.Claims.(jwt.MapClaims)
-	require.True(t, ok)
-
-	assert.Equal(t, respReg.GetUserId(), int64(claims["uid"].(float64)))
+	assert.Equal(t, respReg.GetUserId(), int64(claims["sub"].(float64)))
 	assert.Equal(t, email, claims["email"].(string))
 	assert.Equal(t, appID, int(claims["app_id"].(float64)))
 
@@ -89,4 +93,30 @@ func TestLogin_HappyPath(t *testing.T) {
 
 func genOkPassword() string {
 	return gofakeit.Password(true, true, true, true, false, 10) + "1!A_a"
+}
+
+func validateToken(tokenStr string, publicKeyPEM string) (jwt.Claims, error) {
+	publicKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(publicKeyPEM))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return publicKey, nil
+	},
+		jwt.WithIssuer("markosoft2000"),
+		jwt.WithAudience("auth-service"),
+		jwt.WithExpirationRequired(),
+	)
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, errors.New("token has expired")
+		}
+		return nil, fmt.Errorf("token validation failed: %w", err)
+	}
+
+	return token.Claims, nil
 }

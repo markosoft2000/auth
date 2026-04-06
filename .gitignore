@@ -10,3 +10,4 @@ configs/local_tests.yaml
 
 vendor/
 proto/sso/buf/
+pkg/

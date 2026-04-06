@@ -9,6 +9,7 @@ grpc:
   port: 50001
   timeout: 5s
 token_ttl: 15m
+refresh_token_ttl: 720h
 hasher:
   memory: 65536
   iterations: 3

@@ -80,6 +80,6 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 	// 3. Assertions
 	st.T.Logf("Received error: %v", err)
 	require.Error(t, err)
-	assert.Empty(t, respLogin.GetToken())
+	assert.Empty(t, respLogin.GetAccessToken())
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }

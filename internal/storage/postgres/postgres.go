@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
@@ -39,6 +41,8 @@ func New(host string, port int, user, password, dbname, sslmode string) (*Storag
 func (s *Storage) Stop() {
 	s.pool.Close()
 }
+
+// user section
 
 func (s *Storage) User(ctx context.Context, email string) (*models.User, error) {
 	const op = "storage.postgres.User"
@@ -95,6 +99,8 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash string) (
 	return id, nil
 }
 
+// app section
+
 func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	const op = "storage.postgres.App"
 
@@ -111,4 +117,81 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	}
 
 	return app, nil
+}
+
+// token section
+
+func (s *Storage) SaveRefreshToken(
+	ctx context.Context,
+	userID int64,
+	token string,
+	expiresAt time.Time,
+	ip netip.Addr,
+) error {
+	const op = "storage.postgres.SaveRefreshToken"
+
+	query := "INSERT INTO refresh_tokens(user_id, token, expires_at, ip_address) VALUES($1, $2, $3, $4)"
+
+	_, err := s.pool.Exec(ctx, query, userID, token, expiresAt, ip)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) RefreshToken(
+	ctx context.Context,
+	token string,
+) (*models.RefreshToken, error) {
+	const op = "storage.postgres.RefreshToken"
+
+	tokenModel := &models.RefreshToken{}
+
+	query := "SELECT user_id, revoked, ip_address FROM refresh_tokens WHERE token = $1"
+
+	err := s.pool.QueryRow(ctx, query, token).Scan(&tokenModel.UserID, &tokenModel.Revoked, &tokenModel.IP_address)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &models.RefreshToken{}, fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
+		}
+
+		return &models.RefreshToken{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return tokenModel, nil
+}
+
+func (s *Storage) RevokeToken(ctx context.Context, token string) error {
+	const op = "storage.postgres.RevokeToken"
+
+	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE token = $1"
+
+	_, err := s.pool.Exec(ctx, query, token)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
+		}
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) RevokeAllTokens(ctx context.Context, userId int64) error {
+	const op = "storage.postgres.RevokeAllTokens"
+
+	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 and revoked = FALSE"
+
+	_, err := s.pool.Exec(ctx, query, userId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
+		}
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }

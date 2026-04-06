@@ -17,7 +17,7 @@ run-test:
 	@echo "--- Preparation ---"
 
 	@make migrate-up-test 
-	
+
 	@echo "--- Starting Test Server ---"
 	# Start Server in background with test config
 	@CONFIG_PATH=$(shell pwd)/$(TEST_CONFIG_PATH) ./bin/auth-server & \
@@ -37,5 +37,18 @@ run-test:
 run:
 	-@go run cmd/server/main.go
 
+PROTO_DIR = proto
+GEN_DIR = pkg/gen/grpc/auth
+VENDOR_DIR = vendor/protovalidate/proto/protovalidate
+
 gen-proto:
+	$(shell mkdir -p $(GEN_DIR))
+	rm -rf $(GEN_DIR)/*.go
+
 	@buf dep update && buf generate
+
+	protoc -I $(PROTO_DIR) \
+	       -I $(VENDOR_DIR) \
+	       $(PROTO_DIR)/sso/sso.proto \
+	       --go_out=$(GEN_DIR) --go_opt=paths=source_relative \
+	       --go-grpc_out=$(GEN_DIR) --go-grpc_opt=paths=source_relative

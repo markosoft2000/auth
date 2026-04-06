@@ -24,12 +24,27 @@ type Auth interface {
 		email string,
 		password string,
 		appID int,
-	) (token string, err error)
+		ip string,
+	) (
+		accessToken string,
+		refreshToken string,
+		err error,
+	)
 
 	IsAdmin(
 		ctx context.Context,
 		userID int64,
 	) (bool, error)
+
+	RefreshToken(
+		ctx context.Context,
+		refreshToken string,
+		ip string,
+	) (
+		newAccessToken string,
+		newRefreshToken string,
+		err error,
+	)
 }
 
 type serverAPI struct {
@@ -68,7 +83,13 @@ func (s *serverAPI) Login(ctx context.Context, req *authv1.LoginRequest) (*authv
 		return nil, status.Error(codes.InvalidArgument, "app_id is required")
 	}
 
-	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), int(req.GetAppId()))
+	accessToken, refreshToken, err := s.auth.Login(
+		ctx,
+		req.GetEmail(),
+		req.GetPassword(),
+		int(req.GetAppId()),
+		req.GetIp(),
+	)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
@@ -77,7 +98,10 @@ func (s *serverAPI) Login(ctx context.Context, req *authv1.LoginRequest) (*authv
 		return nil, status.Error(codes.Internal, "failed to login")
 	}
 
-	return &authv1.LoginResponse{Token: token}, nil
+	return &authv1.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
 }
 
 func (s *serverAPI) IsAdmin(ctx context.Context, req *authv1.IsAdminRequest) (*authv1.IsAdminResponse, error) {
@@ -95,4 +119,20 @@ func (s *serverAPI) IsAdmin(ctx context.Context, req *authv1.IsAdminRequest) (*a
 	}
 
 	return &authv1.IsAdminResponse{IsAdmin: isAdmin}, nil
+}
+
+func (s *serverAPI) RefreshToken(ctx context.Context, req *authv1.RefreshTokenRequest) (*authv1.RefreshTokenResponse, error) {
+	accessToken, refreshToken, err := s.auth.RefreshToken(ctx, req.GetRefreshToken(), req.GetIp())
+	if err != nil {
+		if errors.Is(err, auth.ErrRefreshTokenNotFound) || errors.Is(err, auth.ErrInvalidIpAddress) {
+			return nil, status.Error(codes.Unauthenticated, "token not found")
+		}
+
+		return nil, status.Error(codes.Internal, "failed to refresh access token")
+	}
+
+	return &authv1.RefreshTokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
 }

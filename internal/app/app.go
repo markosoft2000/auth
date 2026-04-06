@@ -16,10 +16,11 @@ func New(
 	log *slog.Logger,
 	grpcPort int,
 	tokenTTL time.Duration,
+	refreshTokenTTL time.Duration,
 	hasher auth.Hasher,
 	storage auth.Storage,
 ) *App {
-	authService := auth.New(log, tokenTTL, hasher, storage)
+	authService := auth.New(log, tokenTTL, refreshTokenTTL, hasher, storage)
 	grpcApp := grpcapp.New(log, grpcPort, authService)
 
 	return &App{

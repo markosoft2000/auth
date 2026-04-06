@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	Env        string           `yaml:"env" env:"ENV" env-default:"local"`
-	Postgres   PostgresConfig   `yaml:"postgres"`
-	HTTPServer HTTPServerConfig `yaml:"http_server"`
-	GRPC       GRPCConfig       `yaml:"grpc"`
-	TokenTTL   time.Duration    `yaml:"token_ttl" env-default:"1h"`
-	Hasher     HasherConfig     `yaml:"hasher"`
+	Env             string           `yaml:"env" env:"ENV" env-default:"local"`
+	Postgres        PostgresConfig   `yaml:"postgres"`
+	HTTPServer      HTTPServerConfig `yaml:"http_server"`
+	GRPC            GRPCConfig       `yaml:"grpc"`
+	TokenTTL        time.Duration    `yaml:"token_ttl" env-default:"1h"`
+	RefreshTokenTTL time.Duration    `yaml:"refresh_token_ttl" env-default:"30d"`
+	Hasher          HasherConfig     `yaml:"hasher"`
 }
 
 type HTTPServerConfig struct {

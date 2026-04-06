@@ -69,12 +69,13 @@ func main() {
 	}
 
 	storage := auth.Storage{
-		UserSaver:    pgStorage,
-		UserProvider: pgStorage,
-		AppProvider:  pgStorage,
+		UserSaver:     pgStorage,
+		UserProvider:  pgStorage,
+		AppProvider:   pgStorage,
+		TokenProvider: pgStorage,
 	}
 
-	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL, hasher, storage)
+	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL, cfg.RefreshTokenTTL, hasher, storage)
 	go func() {
 		grpcApp.GRPCServer.MustRun()
 	}()

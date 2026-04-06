@@ -7,8 +7,13 @@ import (
 	"github.com/markosoft2000/auth/internal/domain/models"
 )
 
-func GenerateToken(user models.User, app models.App, duration time.Duration) (string, error) {
-	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(app.Secret))
+func GenerateToken(
+	user *models.User,
+	appID int,
+	duration time.Duration,
+	secret string,
+) (string, error) {
+	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(secret))
 	if err != nil {
 		return "", err
 	}
@@ -17,7 +22,7 @@ func GenerateToken(user models.User, app models.App, duration time.Duration) (st
 		"sub":    user.ID,
 		"email":  user.Email,
 		"exp":    time.Now().Add(duration).Unix(),
-		"app_id": app.ID,
+		"app_id": appID,
 		"iss":    "markosoft2000",
 		"aud":    "auth-service",
 	})
@@ -28,4 +33,22 @@ func GenerateToken(user models.User, app models.App, duration time.Duration) (st
 	}
 
 	return tokenString, nil
+}
+
+type CustomTokenClaims struct {
+	UserID int64  `json:"sub"`
+	Email  string `json:"email"`
+	AppID  int    `json:"app_id"`
+	jwt.RegisteredClaims
+}
+
+func GetClaimsUnverified(token string) (*CustomTokenClaims, error) {
+	claims := &CustomTokenClaims{}
+
+	_, _, err := new(jwt.Parser).ParseUnverified(token, claims)
+	if err != nil {
+		return nil, err
+	}
+
+	return claims, nil
 }

@@ -7,3 +7,6 @@ configs/local_tests.yaml
 
 # Keep the example/template version
 !configs/local.example.yaml
+
+vendor/
+proto/sso/buf/

@@ -69,10 +69,10 @@ func TestLogin_HappyPath(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.NotEmpty(t, respLogin.GetToken())
+	assert.NotEmpty(t, respLogin.GetAccessToken())
 
 	// 3. Verify Token
-	tokenClaims, err := validateToken(respLogin.GetToken(), appPublicKey)
+	tokenClaims, err := validateToken(respLogin.GetAccessToken(), appPublicKey)
 	require.NoError(t, err)
 	claims := tokenClaims.(jwt.MapClaims)
 

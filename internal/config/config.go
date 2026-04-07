@@ -17,6 +17,7 @@ type Config struct {
 	TokenTTL        time.Duration    `yaml:"token_ttl" env-default:"1h"`
 	RefreshTokenTTL time.Duration    `yaml:"refresh_token_ttl" env-default:"30d"`
 	Hasher          HasherConfig     `yaml:"hasher"`
+	MasterSecret    string           `yaml:"master_secret"`
 }
 
 type HTTPServerConfig struct {

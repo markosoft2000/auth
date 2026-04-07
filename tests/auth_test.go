@@ -66,10 +66,12 @@ func TestLogin_HappyPath(t *testing.T) {
 		Email:    email,
 		Password: password,
 		AppId:    appID,
+		Ip:       "1.1.1.1",
 	})
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, respLogin.GetAccessToken())
+	assert.NotEmpty(t, respLogin.GetRefreshToken())
 
 	// 3. Verify Token
 	tokenClaims, err := validateToken(respLogin.GetAccessToken(), appPublicKey)

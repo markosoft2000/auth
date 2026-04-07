@@ -75,6 +75,7 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 		Email:    email,
 		Password: "wrongPassword",
 		AppId:    1,
+		Ip:       "1.1.1.1",
 	})
 
 	// 3. Assertions

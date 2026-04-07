@@ -75,7 +75,15 @@ func main() {
 		TokenProvider: pgStorage,
 	}
 
-	grpcApp := grpcapp.New(log, cfg.GRPC.Port, cfg.TokenTTL, cfg.RefreshTokenTTL, hasher, storage)
+	grpcApp := grpcapp.New(
+		log,
+		cfg.GRPC.Port,
+		cfg.TokenTTL,
+		cfg.RefreshTokenTTL,
+		hasher,
+		cfg.MasterSecret,
+		storage,
+	)
 	go func() {
 		grpcApp.GRPCServer.MustRun()
 	}()

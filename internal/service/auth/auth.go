@@ -79,6 +79,7 @@ type Auth struct {
 	tokenTTL        time.Duration
 	refreshTokenTTL time.Duration
 	hasher          Hasher
+	masterSecret    string
 	userSaver       UserSaver
 	userProvider    UserProvider
 	appProvider     AppProvider
@@ -90,6 +91,7 @@ func New(
 	tokenTTL time.Duration,
 	refreshTokenTTL time.Duration,
 	hasher Hasher,
+	masterSecret string,
 	storage Storage,
 ) *Auth {
 	return &Auth{
@@ -97,6 +99,7 @@ func New(
 		tokenTTL:        tokenTTL,
 		refreshTokenTTL: refreshTokenTTL,
 		hasher:          hasher,
+		masterSecret:    masterSecret,
 		userSaver:       storage.UserSaver,
 		userProvider:    storage.UserProvider,
 		appProvider:     storage.AppProvider,
@@ -185,14 +188,14 @@ func (a *Auth) Login(
 
 	log.Info("user logged in successfully")
 
-	accessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, app.Secret)
+	accessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, app.Secret, a.masterSecret)
 	if err != nil {
 		log.Error("failed to generate accessToken", slog.Any("error", err))
 
 		return "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	refreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, app.Secret)
+	refreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, app.Secret, a.masterSecret)
 	if err != nil {
 		log.Error("failed to generate refreshToken", slog.Any("error", err))
 
@@ -317,7 +320,7 @@ func (a *Auth) RefreshToken(
 	}
 
 	// OK
-	newAccessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, app.Secret)
+	newAccessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, app.Secret, a.masterSecret)
 	if err != nil {
 		log.Error("failed to generate accessToken", slog.Any("error", err))
 
@@ -325,7 +328,7 @@ func (a *Auth) RefreshToken(
 	}
 
 	// refresh token rotation
-	newRefreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, app.Secret)
+	newRefreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, app.Secret, a.masterSecret)
 	if err != nil {
 		log.Error("failed to generate refreshToken", slog.Any("error", err))
 

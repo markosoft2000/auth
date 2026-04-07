@@ -5,15 +5,22 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/markosoft2000/auth/internal/domain/models"
+	cipher "github.com/markosoft2000/auth/internal/lib/crypt"
 )
 
 func GenerateToken(
 	user *models.User,
 	appID int,
 	duration time.Duration,
-	secret string,
+	appSecret []byte,
+	masterSecret string,
 ) (string, error) {
-	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(secret))
+	decryptedPEM, err := cipher.DecryptKey(appSecret, masterSecret)
+	if err != nil {
+		return "", err
+	}
+
+	key, err := jwt.ParseRSAPrivateKeyFromPEM(decryptedPEM)
 	if err != nil {
 		return "", err
 	}

@@ -10,6 +10,7 @@ grpc:
   timeout: 5s
 token_ttl: 15m
 refresh_token_ttl: 720h
+master_secret: "master_secret"
 hasher:
   memory: 65536
   iterations: 3

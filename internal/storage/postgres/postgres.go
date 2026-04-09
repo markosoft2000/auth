@@ -119,20 +119,56 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	return app, nil
 }
 
+func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err error) {
+	const op = "storage.postgres.SaveApp"
+
+	query := "INSERT INTO apps(name, secret) VALUES($1, $2) RETURNING id"
+
+	err = s.pool.QueryRow(ctx, query, app.Name, app.Secret).Scan(&id)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return 0, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
+		}
+
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) DeleteApp(ctx context.Context, appID int) error {
+	const op = "storage.postgres.DeleteApp"
+
+	query := "DELETE FROM apps WHERE id = $1"
+
+	_, err := s.pool.Exec(ctx, query, appID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
+		}
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
 // token section
 
 func (s *Storage) SaveRefreshToken(
 	ctx context.Context,
 	userID int64,
+	appId int,
 	token string,
 	expiresAt time.Time,
 	ip netip.Addr,
 ) error {
 	const op = "storage.postgres.SaveRefreshToken"
 
-	query := "INSERT INTO refresh_tokens(user_id, token, expires_at, ip_address) VALUES($1, $2, $3, $4)"
+	query := "INSERT INTO refresh_tokens(user_id, app_id, token, expires_at, ip_address) VALUES($1, $2, $3, $4, $5)"
 
-	_, err := s.pool.Exec(ctx, query, userID, token, expiresAt, ip)
+	_, err := s.pool.Exec(ctx, query, userID, appId, token, expiresAt, ip)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -179,8 +215,8 @@ func (s *Storage) RevokeToken(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *Storage) RevokeAllTokens(ctx context.Context, userId int64) error {
-	const op = "storage.postgres.RevokeAllTokens"
+func (s *Storage) RevokeAllUserTokens(ctx context.Context, userId int64) error {
+	const op = "storage.postgres.RevokeAllUserTokens"
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 and revoked = FALSE"
 
@@ -188,6 +224,23 @@ func (s *Storage) RevokeAllTokens(ctx context.Context, userId int64) error {
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
+		}
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) RevokeAllAppTokens(ctx context.Context, appId int) error {
+	const op = "storage.postgres.RevokeAllAppTokens"
+
+	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE app_id = $1 and revoked = FALSE"
+
+	_, err := s.pool.Exec(ctx, query, appId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
 		}
 
 		return fmt.Errorf("%s: %w", op, err)

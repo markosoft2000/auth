@@ -45,6 +45,14 @@ type Auth interface {
 		newRefreshToken string,
 		err error,
 	)
+
+	AddApp(
+		ctx context.Context,
+		appName string,
+		appSecret []byte,
+	) (id int, err error)
+
+	RemoveApp(ctx context.Context, appId int) error
 }
 
 type serverAPI struct {
@@ -135,4 +143,30 @@ func (s *serverAPI) RefreshToken(ctx context.Context, req *authv1.RefreshTokenRe
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+func (s *serverAPI) AddApp(ctx context.Context, req *authv1.AddAppRequest) (*authv1.AddAppResponse, error) {
+	id, err := s.auth.AddApp(ctx, req.GetName(), req.GetSecret())
+	if err != nil {
+		if errors.Is(err, auth.ErrAppExists) {
+			return nil, status.Error(codes.AlreadyExists, "app already exists")
+		}
+
+		return nil, status.Error(codes.Internal, "failed to add app")
+	}
+
+	return &authv1.AddAppResponse{Id: int32(id)}, nil
+}
+
+func (s *serverAPI) RemoveApp(ctx context.Context, req *authv1.RemoveAppRequest) (*authv1.RemoveAppResponse, error) {
+	err := s.auth.RemoveApp(ctx, int(req.GetId()))
+	if err != nil {
+		if errors.Is(err, auth.ErrAppNotFound) {
+			return nil, status.Error(codes.NotFound, "app not found")
+		}
+
+		return nil, status.Error(codes.Internal, "failed to remove app")
+	}
+
+	return &authv1.RemoveAppResponse{}, nil
 }

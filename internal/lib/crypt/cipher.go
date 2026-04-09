@@ -9,10 +9,20 @@ import (
 	"io"
 )
 
-// EncryptKey takes the raw RSA PEM string and returns an encrypted byte slice
-func EncryptKey(plaintextPEM []byte, masterSecret string) ([]byte, error) {
+type GCMCipher struct {
+	masterSecret string
+}
+
+func New(masterSecret string) *GCMCipher {
+	return &GCMCipher{
+		masterSecret: masterSecret,
+	}
+}
+
+// Encrypt takes the raw RSA string and returns an encrypted byte slice
+func (c *GCMCipher) Encrypt(plaintext []byte) ([]byte, error) {
 	// 1. Create a 32-byte key from your secret (for AES-256)
-	hash := sha256.Sum256([]byte(masterSecret))
+	hash := sha256.Sum256([]byte(c.masterSecret))
 	key := hash[:]
 
 	block, err := aes.NewCipher(key)
@@ -34,13 +44,13 @@ func EncryptKey(plaintextPEM []byte, masterSecret string) ([]byte, error) {
 
 	// 4. Encrypt and append the nonce to the front of the result
 	// The nonce is required for decryption later and is not secret.
-	return gcm.Seal(nonce, nonce, plaintextPEM, nil), nil
+	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
-// DecryptKey takes an encrypted byte slice and returns the raw RSA PEM string
-func DecryptKey(encryptedKey []byte, masterSecret string) ([]byte, error) {
+// Decrypt takes an encrypted byte slice and returns the raw RSA string
+func (c *GCMCipher) Decrypt(encryptedData []byte) ([]byte, error) {
 	// 1. Hash the masterSecret to get a consistent 32-byte key for AES-256
-	hash := sha256.Sum256([]byte(masterSecret))
+	hash := sha256.Sum256([]byte(c.masterSecret))
 	key := hash[:]
 
 	block, err := aes.NewCipher(key)
@@ -55,11 +65,11 @@ func DecryptKey(encryptedKey []byte, masterSecret string) ([]byte, error) {
 
 	// 2. Extract nonce and decrypt
 	nonceSize := gcm.NonceSize()
-	if len(encryptedKey) < nonceSize {
+	if len(encryptedData) < nonceSize {
 		return nil, errors.New("ciphertext too short")
 	}
 
-	nonce, ciphertext := encryptedKey[:nonceSize], encryptedKey[nonceSize:]
+	nonce, ciphertext := encryptedData[:nonceSize], encryptedData[nonceSize:]
 
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }

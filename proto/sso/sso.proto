@@ -11,6 +11,8 @@ service Auth {
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc IsAdmin (IsAdminRequest) returns (IsAdminResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
+  rpc AddApp (AddAppRequest) returns (AddAppResponse);
+  rpc RemoveApp (RemoveAppRequest) returns (RemoveAppResponse);
 }
 
 message RegisterRequest {
@@ -41,8 +43,8 @@ message RegisterResponse {
 
 message LoginRequest {
   string email = 1;
-  string password = 2;
-  int32 app_id = 3; 
+  string password = 2 [(buf.validate.field).string.min_len = 8];
+  int32 app_id = 3 [(buf.validate.field).int32.gt = 0];
   string ip = 4 [(buf.validate.field).string.ip = true];
 }
 
@@ -68,3 +70,20 @@ message RefreshTokenResponse {
   string access_token = 1;
   string refresh_token = 2;
 }
+
+message AddAppRequest {
+  string name =1 [(buf.validate.field).string.min_len = 1];
+  bytes secret = 2 [(buf.validate.field).bytes.min_len = 1];
+}
+
+message AddAppResponse {
+  int32 id = 1;
+} 
+
+message RemoveAppRequest {
+  int32 id = 1 [(buf.validate.field).int32.gt = 0];
+}
+
+message RemoveAppResponse {
+  
+} 

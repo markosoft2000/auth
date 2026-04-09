@@ -18,11 +18,16 @@ type Hasher interface {
 	ComparePassword(hash, password string) bool
 }
 
+type Cipher interface {
+	Encrypt(plaintext []byte) ([]byte, error)
+	Decrypt(encrypted []byte) ([]byte, error)
+}
+
 type Storage struct {
-	UserProvider  UserProvider
-	UserSaver     UserSaver
-	AppProvider   AppProvider
-	TokenProvider TokenProvider
+	UserProvider UserProvider
+	UserSaver    UserSaver
+	AppManager   AppManager
+	TokenManager TokenManager
 }
 
 // UserProvider handles User-related reads
@@ -40,13 +45,15 @@ type UserSaver interface {
 	) (uid int64, err error)
 }
 
-// AppProvider handles Application-related metadata (for JWT signing/secrets)
-type AppProvider interface {
+// AppManager handles Application-related metadata (for JWT signing/secrets)
+type AppManager interface {
 	App(ctx context.Context, appID int) (*models.App, error)
+	SaveApp(ctx context.Context, app *models.App) (id int, err error)
+	DeleteApp(ctx context.Context, appID int) error
 }
 
-// TokenProvider handles storing tokens
-type TokenProvider interface {
+// TokenManager handles storing tokens
+type TokenManager interface {
 	RefreshToken(
 		ctx context.Context,
 		token string,
@@ -55,6 +62,7 @@ type TokenProvider interface {
 	SaveRefreshToken(
 		ctx context.Context,
 		userID int64,
+		appId int,
 		token string,
 		expiresAt time.Time,
 		ip netip.Addr,
@@ -62,7 +70,8 @@ type TokenProvider interface {
 
 	RevokeToken(ctx context.Context, token string) error
 
-	RevokeAllTokens(ctx context.Context, userId int64) error
+	RevokeAllUserTokens(ctx context.Context, userId int64) error
+	RevokeAllAppTokens(ctx context.Context, appId int) error
 }
 
 var (
@@ -70,6 +79,8 @@ var (
 	ErrUserExists           = errors.New("user already exists")
 	ErrUserNotFound         = errors.New("user not found")
 	ErrAppNotFound          = errors.New("app not found")
+	ErrAppExists            = errors.New("app already exists")
+	ErrInvalidAppKey        = errors.New("invalid app key")
 	ErrRefreshTokenNotFound = errors.New("refresh token not found")
 	ErrInvalidIpAddress     = errors.New("invalid IP address for the session")
 )
@@ -79,11 +90,11 @@ type Auth struct {
 	tokenTTL        time.Duration
 	refreshTokenTTL time.Duration
 	hasher          Hasher
-	masterSecret    string
+	cipher          Cipher
 	userSaver       UserSaver
 	userProvider    UserProvider
-	appProvider     AppProvider
-	tokenProvider   TokenProvider
+	appManager      AppManager
+	tokenManager    TokenManager
 }
 
 func New(
@@ -91,7 +102,7 @@ func New(
 	tokenTTL time.Duration,
 	refreshTokenTTL time.Duration,
 	hasher Hasher,
-	masterSecret string,
+	cipher Cipher,
 	storage Storage,
 ) *Auth {
 	return &Auth{
@@ -99,14 +110,15 @@ func New(
 		tokenTTL:        tokenTTL,
 		refreshTokenTTL: refreshTokenTTL,
 		hasher:          hasher,
-		masterSecret:    masterSecret,
+		cipher:          cipher,
 		userSaver:       storage.UserSaver,
 		userProvider:    storage.UserProvider,
-		appProvider:     storage.AppProvider,
-		tokenProvider:   storage.TokenProvider,
+		appManager:      storage.AppManager,
+		tokenManager:    storage.TokenManager,
 	}
 }
 
+// RegisterNewUser registers a new user
 func (a *Auth) RegisterNewUser(
 	ctx context.Context,
 	email string,
@@ -140,6 +152,7 @@ func (a *Auth) RegisterNewUser(
 	return id, nil
 }
 
+// Login provides a new access and refresh tokens
 func (a *Auth) Login(
 	ctx context.Context,
 	email string,
@@ -155,6 +168,17 @@ func (a *Auth) Login(
 	log := a.log.With(slog.String("op", op), slog.String("email", email))
 
 	log.Info("attempting login")
+
+	app, err := a.appManager.App(ctx, appID)
+	if err != nil {
+		if errors.Is(err, storage.ErrAppNotFound) {
+			log.Error("app not found", slog.Any("error", err))
+
+			return "", "", fmt.Errorf("%s: %w", op, ErrAppNotFound)
+		}
+
+		return "", "", fmt.Errorf("%s: %w", op, err)
+	}
 
 	user, err := a.userProvider.User(ctx, email)
 	if err != nil {
@@ -175,27 +199,23 @@ func (a *Auth) Login(
 		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 	}
 
-	app, err := a.appProvider.App(ctx, appID)
-	if err != nil {
-		if errors.Is(err, storage.ErrAppNotFound) {
-			log.Error("app not found", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, ErrAppNotFound)
-		}
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
 	log.Info("user logged in successfully")
 
-	accessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, app.Secret, a.masterSecret)
+	decryptedAppSecret, err := a.cipher.Decrypt(app.Secret)
+	if err != nil {
+		log.Warn("invalid app key", slog.Int("app_id", app.ID))
+
+		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidAppKey)
+	}
+
+	accessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, decryptedAppSecret)
 	if err != nil {
 		log.Error("failed to generate accessToken", slog.Any("error", err))
 
 		return "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	refreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, app.Secret, a.masterSecret)
+	refreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, decryptedAppSecret)
 	if err != nil {
 		log.Error("failed to generate refreshToken", slog.Any("error", err))
 
@@ -207,7 +227,7 @@ func (a *Auth) Login(
 		return "", "", fmt.Errorf("invalid IP format - %s: %w", op, err)
 	}
 
-	err = a.tokenProvider.SaveRefreshToken(ctx, user.ID, refreshToken, time.Now().Add(a.refreshTokenTTL), netIP)
+	err = a.tokenManager.SaveRefreshToken(ctx, user.ID, app.ID, refreshToken, time.Now().Add(a.refreshTokenTTL), netIP)
 	if err != nil {
 		log.Error("failed to save refresh token", slog.Any("error", err))
 
@@ -238,6 +258,7 @@ func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	return isAdmin, nil
 }
 
+// RefreshToken provides a new access token and refresh token with rotation
 func (a *Auth) RefreshToken(
 	ctx context.Context,
 	refreshToken string,
@@ -262,7 +283,7 @@ func (a *Auth) RefreshToken(
 		Email: claims.Email,
 	}
 
-	app, err := a.appProvider.App(ctx, claims.AppID)
+	app, err := a.appManager.App(ctx, claims.AppID)
 	if err != nil {
 		if errors.Is(err, storage.ErrAppNotFound) {
 			log.Error("app not found", slog.Any("error", err))
@@ -279,7 +300,7 @@ func (a *Auth) RefreshToken(
 		slog.Int("app_id", app.ID),
 	)
 
-	storedRefreshToken, err := a.tokenProvider.RefreshToken(ctx, refreshToken)
+	storedRefreshToken, err := a.tokenManager.RefreshToken(ctx, refreshToken)
 	if err != nil {
 		if errors.Is(err, storage.ErrRefreshTokenNotFound) {
 			log.Error("refresh token not found", slog.Any("error", err))
@@ -297,6 +318,13 @@ func (a *Auth) RefreshToken(
 	if storedRefreshToken.Revoked {
 		log.Warn("token revoked")
 
+		err := a.tokenManager.RevokeAllUserTokens(ctx, user.ID)
+		if err != nil {
+			log.Error("failed to revoke refresh token", slog.Any("error", err))
+
+			return "", "", fmt.Errorf("%s: %w", op, err)
+		}
+
 		return "", "", fmt.Errorf("%s: %w", op, ErrRefreshTokenNotFound)
 	}
 
@@ -309,7 +337,7 @@ func (a *Auth) RefreshToken(
 	if storedRefreshToken.IP_address != netIP {
 		log.Warn("invalid IP address for the session. token revoked.", slog.String("ip", ip))
 
-		err := a.tokenProvider.RevokeAllTokens(ctx, user.ID)
+		err := a.tokenManager.RevokeAllUserTokens(ctx, user.ID)
 		if err != nil {
 			log.Error("failed to revoke refresh token", slog.Any("error", err))
 
@@ -320,7 +348,14 @@ func (a *Auth) RefreshToken(
 	}
 
 	// OK
-	newAccessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, app.Secret, a.masterSecret)
+	decryptedAppSecret, err := a.cipher.Decrypt(app.Secret)
+	if err != nil {
+		log.Warn("invalid app key", slog.Int("app_id", app.ID))
+
+		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidAppKey)
+	}
+
+	newAccessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, decryptedAppSecret)
 	if err != nil {
 		log.Error("failed to generate accessToken", slog.Any("error", err))
 
@@ -328,16 +363,17 @@ func (a *Auth) RefreshToken(
 	}
 
 	// refresh token rotation
-	newRefreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, app.Secret, a.masterSecret)
+	newRefreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, decryptedAppSecret)
 	if err != nil {
 		log.Error("failed to generate refreshToken", slog.Any("error", err))
 
 		return "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	err = a.tokenProvider.SaveRefreshToken(
+	err = a.tokenManager.SaveRefreshToken(
 		ctx,
 		user.ID,
+		app.ID,
 		newRefreshToken,
 		time.Now().Add(a.refreshTokenTTL),
 		storedRefreshToken.IP_address,
@@ -348,7 +384,7 @@ func (a *Auth) RefreshToken(
 		return "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	err = a.tokenProvider.RevokeToken(ctx, refreshToken)
+	err = a.tokenManager.RevokeToken(ctx, refreshToken)
 	if err != nil {
 		log.Error("failed to revoke refresh token", slog.Any("error", err))
 
@@ -356,4 +392,72 @@ func (a *Auth) RefreshToken(
 	}
 
 	return newAccessToken, newRefreshToken, nil
+}
+
+// AddApp adds a new app with a secret or private key
+func (a *Auth) AddApp(ctx context.Context, appName string, appSecret []byte) (id int, err error) {
+	const op = "auth.AddApp"
+	log := a.log.With(slog.String("op", op), slog.String("app_name", appName))
+
+	log.Info("adding new app")
+
+	encryptedSecret, err := a.cipher.Encrypt(appSecret)
+	if err != nil {
+		log.Error("failed to encrypt secret", slog.Any("error", err.Error()))
+
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	app := &models.App{
+		Name:   appName,
+		Secret: encryptedSecret,
+	}
+
+	id, err = a.appManager.SaveApp(ctx, app)
+	if err != nil {
+		if errors.Is(err, storage.ErrAppExists) {
+			log.Error("app already exists", slog.Any("error", err))
+
+			return 0, fmt.Errorf("%s: %w", op, ErrAppExists)
+		}
+
+		log.Error("failed to save app", slog.Any("error", err))
+
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return id, nil
+}
+
+// RemoveApp deletes app
+func (a *Auth) RemoveApp(ctx context.Context, appId int) error {
+	const op = "auth.RemoveApp"
+	log := a.log.With(slog.String("op", op), slog.Int("app_id", appId))
+
+	log.Info("removing app")
+
+	err := a.appManager.DeleteApp(ctx, appId)
+	if err != nil {
+		if errors.Is(err, storage.ErrAppNotFound) {
+			log.Error("app not found", slog.Any("error", err))
+
+			return fmt.Errorf("%s: %w", op, ErrAppNotFound)
+		}
+
+		log.Error("failed to remove app", slog.Any("error", err))
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	log.Warn("Revoking all refresh tokens for APP ID", slog.Int("app_id", appId))
+
+	// clean up all refresh tokens associated with that app_id to ensure no active sessions remain
+	err = a.tokenManager.RevokeAllAppTokens(ctx, appId)
+	if err != nil {
+		log.Error("failed to revoke all refresh token for the app", slog.Any("error", err))
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }

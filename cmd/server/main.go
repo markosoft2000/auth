@@ -11,6 +11,7 @@ import (
 
 	grpcapp "github.com/markosoft2000/auth/internal/app"
 	"github.com/markosoft2000/auth/internal/config"
+	gcmCipher "github.com/markosoft2000/auth/internal/lib/crypt"
 	"github.com/markosoft2000/auth/internal/lib/hasher/argon2"
 	"github.com/markosoft2000/auth/internal/routes"
 	"github.com/markosoft2000/auth/internal/service/auth"
@@ -55,6 +56,8 @@ func main() {
 		cfg.Hasher.KeyLength,
 	)
 
+	cipher := gcmCipher.New(cfg.MasterSecret)
+
 	pgStorage, err := postgres.New(
 		cfg.Postgres.Host,
 		cfg.Postgres.Port,
@@ -69,10 +72,10 @@ func main() {
 	}
 
 	storage := auth.Storage{
-		UserSaver:     pgStorage,
-		UserProvider:  pgStorage,
-		AppProvider:   pgStorage,
-		TokenProvider: pgStorage,
+		UserSaver:    pgStorage,
+		UserProvider: pgStorage,
+		AppManager:   pgStorage,
+		TokenManager: pgStorage,
 	}
 
 	grpcApp := grpcapp.New(
@@ -81,7 +84,7 @@ func main() {
 		cfg.TokenTTL,
 		cfg.RefreshTokenTTL,
 		hasher,
-		cfg.MasterSecret,
+		cipher,
 		storage,
 	)
 	go func() {

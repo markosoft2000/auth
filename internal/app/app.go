@@ -18,10 +18,10 @@ func New(
 	tokenTTL time.Duration,
 	refreshTokenTTL time.Duration,
 	hasher auth.Hasher,
-	masterSecret string,
+	cipher auth.Cipher,
 	storage auth.Storage,
 ) *App {
-	authService := auth.New(log, tokenTTL, refreshTokenTTL, hasher, masterSecret, storage)
+	authService := auth.New(log, tokenTTL, refreshTokenTTL, hasher, cipher, storage)
 	grpcApp := grpcapp.New(log, grpcPort, authService)
 
 	return &App{

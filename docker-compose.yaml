@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:14.7
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: auth_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-time service to run migrations
+  migrator:
+    build: .
+    environment:
+      CONFIG_PATH: "./configs/local.yaml"
+    command: ["./migrator", "up"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    restart: always
+    environment:
+      CONFIG_PATH: "./configs/local.yaml"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    ports:
+      - "50001:50001"
+      - "8081:8081"
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

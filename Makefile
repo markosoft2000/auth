@@ -40,7 +40,6 @@ run:
 PROTO_DIR = proto
 GEN_DIR = pkg/gen/grpc/auth
 VENDOR_DIR = vendor/protovalidate/proto/protovalidate
-
 gen-proto:
 	$(shell mkdir -p $(GEN_DIR))
 	rm -rf $(GEN_DIR)/*.go
@@ -52,3 +51,34 @@ gen-proto:
 	       $(PROTO_DIR)/sso/sso.proto \
 	       --go_out=$(GEN_DIR) --go_opt=paths=source_relative \
 	       --go-grpc_out=$(GEN_DIR) --go-grpc_opt=paths=source_relative
+
+# DOCKER
+# Use the service name defined in docker-compose.yaml
+DOCKER_APP_SERVICE = app
+DOCKER_MIGRATOR_SERVICE = migrator
+
+.PHONY: docker-up docker-down docker-reload docker-migrate-up docker-migrate-down
+
+# Start everything
+docker-up:
+	docker compose up --build -d
+
+# Stop everything
+docker-down:
+	docker compose down
+
+# Rebuild the app and restart it without touching the DB
+docker-reload:
+	sudo docker compose up --build -d app
+
+# Database migration up (inside Docker)
+docker-migrate-up:
+	docker compose run --rm $(DOCKER_MIGRATOR_SERVICE) up
+
+# Database migration down (inside Docker)
+docker-migrate-down:
+	docker compose run --rm $(DOCKER_MIGRATOR_SERVICE) down
+
+# Run tests inside Docker
+docker-test:
+	docker compose run --rm $(DOCKER_APP_SERVICE) go test -v -count=1 ./tests/...

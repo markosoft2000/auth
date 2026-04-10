@@ -1,6 +1,6 @@
 module github.com/markosoft2000/auth
 
-go 1.25.6
+go 1.25.1
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1
@@ -14,6 +14,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.5.4
 	github.com/prometheus/client_golang v1.23.2
+	github.com/redis/rueidis v1.0.73
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.48.0
 	google.golang.org/grpc v1.79.2

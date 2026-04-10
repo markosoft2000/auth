@@ -53,10 +53,10 @@ func (s *Storage) User(ctx context.Context, email string) (*models.User, error) 
 	err := s.pool.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.PassHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return &models.User{}, fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
+			return nil, fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
 		}
 
-		return &models.User{}, fmt.Errorf("%s: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return user, nil
@@ -110,10 +110,10 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	err := s.pool.QueryRow(ctx, query, appID).Scan(&app.ID, &app.Name, &app.Secret)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return &models.App{}, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
+			return nil, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
 		}
 
-		return &models.App{}, fmt.Errorf("%s: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return app, nil
@@ -189,10 +189,10 @@ func (s *Storage) RefreshToken(
 	err := s.pool.QueryRow(ctx, query, token).Scan(&tokenModel.UserID, &tokenModel.Revoked, &tokenModel.IP_address)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return &models.RefreshToken{}, fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
+			return nil, fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
 		}
 
-		return &models.RefreshToken{}, fmt.Errorf("%s: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return tokenModel, nil

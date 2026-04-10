@@ -15,7 +15,9 @@ import (
 	"github.com/markosoft2000/auth/internal/lib/hasher/argon2"
 	"github.com/markosoft2000/auth/internal/routes"
 	"github.com/markosoft2000/auth/internal/service/auth"
+	"github.com/markosoft2000/auth/internal/service/auth/cache"
 	"github.com/markosoft2000/auth/internal/storage/postgres"
+	"github.com/markosoft2000/auth/internal/storage/redis"
 )
 
 const (
@@ -71,11 +73,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	storage := auth.Storage{
-		UserSaver:    pgStorage,
-		UserProvider: pgStorage,
-		AppManager:   pgStorage,
-		TokenManager: pgStorage,
+	var appStorage auth.AppManager = pgStorage
+	var redisStorage *redis.Storage
+
+	if cfg.Caching.Enabled {
+		redisStorage, err = redis.New(redis.Config{
+			Host:   cfg.Redis.Host,
+			Port:   cfg.Redis.Port,
+			AppTTL: cfg.Caching.AppTTL,
+		})
+		if err != nil {
+			log.Error("failed to init redis", slog.Any("error", err))
+			os.Exit(1)
+		}
+
+		appStorage = cache.NewAppCache(log, redisStorage, appStorage)
 	}
 
 	grpcApp := grpcapp.New(
@@ -85,7 +97,12 @@ func main() {
 		cfg.RefreshTokenTTL,
 		hasher,
 		cipher,
-		storage,
+		auth.Storage{
+			UserSaver:    pgStorage,
+			UserProvider: pgStorage,
+			AppManager:   appStorage,
+			TokenManager: pgStorage,
+		},
 	)
 	go func() {
 		grpcApp.GRPCServer.MustRun()
@@ -110,6 +127,10 @@ func main() {
 	grpcApp.GRPCServer.Stop()
 
 	pgStorage.Stop()
+
+	if cfg.Caching.Enabled {
+		redisStorage.Stop()
+	}
 
 	log.Info("server stopped")
 }

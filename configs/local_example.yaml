@@ -1,6 +1,6 @@
 env: "local"
 http_server:
-  address: "localhost:8081"
+  address: "0.0.0.0:8081"
   timeout: 3
   read_timeout: 5
   write_timeout: 10
@@ -18,9 +18,15 @@ hasher:
   salt_length: 16
   key_length: 32
 postgres:
-  host: "localhost"
+  host: "db"
   port: 5432
   user: "postgres"
   password: "example"
   database: "auth_db"
   ssl_mode: "disable"
+redis:
+  host: "redis"
+  port: 6379
+caching:
+  enabled: false
+  app_ttl: 1m

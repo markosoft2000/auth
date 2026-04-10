@@ -18,6 +18,8 @@ type Config struct {
 	RefreshTokenTTL time.Duration    `yaml:"refresh_token_ttl" env-default:"30d"`
 	Hasher          HasherConfig     `yaml:"hasher"`
 	MasterSecret    string           `yaml:"master_secret"`
+	Redis           RedisConfig      `yaml:"redis"`
+	Caching         CachingConfig    `yaml:"caching"`
 }
 
 type HTTPServerConfig struct {
@@ -48,6 +50,16 @@ type PostgresConfig struct {
 	Password string `yaml:"password" env:"DB_PASSWORD" env-required:"true"`
 	Database string `yaml:"database" env:"DB_NAME" env-required:"true"`
 	SSLMode  string `yaml:"ssl_mode" env-default:"disable"`
+}
+
+type RedisConfig struct {
+	Host string `yaml:"host" env:"REDIS_HOST" env-default:"localhost"`
+	Port int    `yaml:"port" env:"REDIS_PORT" env-default:"6379"`
+}
+
+type CachingConfig struct {
+	Enabled bool          `yaml:"enabled" env-default:"false"`
+	AppTTL  time.Duration `yaml:"app_ttl" env-default:"1m"`
 }
 
 var once sync.Once

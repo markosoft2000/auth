@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"time"
@@ -140,8 +141,10 @@ func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 
 	// remove tag members - tokens with app-tag
 	for {
+		chunkCtx, chunkCancel := context.WithTimeout(ctx, time.Second)
+
 		resp := s.client.Do(
-			ctx,
+			chunkCtx,
 			s.client.B().
 				Sscan().
 				Key(tag).
@@ -149,18 +152,44 @@ func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 				Count(deleteAppTokenLimit).
 				Build(),
 		)
+		chunkCancel()
 		if err := resp.Error(); err != nil {
+			// Check if it's a timeout error
+			if errors.Is(err, context.DeadlineExceeded) {
+				// If the main ctx time is up, we must stop
+				if ctx.Err() != nil {
+					return fmt.Errorf("%s: main timeout exceeded: %w", op, ctx.Err())
+				}
+
+				// Otherwise, it was just a slow chunk. retry.
+				continue
+			}
+
 			return fmt.Errorf("%s: %w", op, err)
 		}
 
 		entry, _ := resp.AsScanEntry()
 
 		if len(entry.Elements) > 0 {
+			chunkCtx, chunkCancel := context.WithTimeout(ctx, time.Second)
+
 			err := s.client.Do(
-				ctx,
+				chunkCtx,
 				s.client.B().Del().Key(entry.Elements...).Build(),
 			).Error()
+			chunkCancel()
 			if err != nil {
+				// Check if it's a timeout error
+				if errors.Is(err, context.DeadlineExceeded) {
+					// If the main ctx time is up, we must stop
+					if ctx.Err() != nil {
+						return fmt.Errorf("%s: main timeout exceeded: %w", op, ctx.Err())
+					}
+
+					// Otherwise, it was just a slow chunk. retry.
+					continue
+				}
+
 				return fmt.Errorf("%s: %w", op, err)
 			}
 		}

@@ -7,6 +7,7 @@ import (
 
 type RefreshToken struct {
 	UserID     int64
+	AppID      int
 	Token      string
 	ExpiresAt  time.Time
 	CreatedAt  time.Time

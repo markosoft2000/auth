@@ -60,8 +60,10 @@ func (c *appCache) DeleteApp(ctx context.Context, appID int) error {
 	nextErr := c.next.DeleteApp(ctx, appID)
 
 	cacheErr := c.cache.DeleteApp(ctx, appID)
-	if !errors.Is(cacheErr, storage.ErrAppNotFound) {
-		log.Error("failed to delete app from cache", slog.Any("error", cacheErr))
+	if cacheErr != nil {
+		if !errors.Is(cacheErr, storage.ErrAppNotFound) {
+			log.Error("failed to delete app from cache", slog.Any("error", cacheErr))
+		}
 	}
 
 	return nextErr

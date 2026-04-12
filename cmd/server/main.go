@@ -74,13 +74,16 @@ func main() {
 	}
 
 	var appStorage auth.AppManager = pgStorage
+	var tokenStorage auth.TokenManager = pgStorage
+
 	var redisStorage *redis.Storage
 
 	if cfg.Caching.Enabled {
 		redisStorage, err = redis.New(redis.Config{
-			Host:   cfg.Redis.Host,
-			Port:   cfg.Redis.Port,
-			AppTTL: cfg.Caching.AppTTL,
+			Host:            cfg.Redis.Host,
+			Port:            cfg.Redis.Port,
+			AppTTL:          cfg.Caching.AppTTL,
+			RefreshTokenTTL: cfg.Caching.RefreshTokenTTL,
 		})
 		if err != nil {
 			log.Error("failed to init redis", slog.Any("error", err))
@@ -88,6 +91,7 @@ func main() {
 		}
 
 		appStorage = cache.NewAppCache(log, redisStorage, appStorage)
+		tokenStorage = cache.NewTokenCache(log, redisStorage, tokenStorage)
 	}
 
 	grpcApp := grpcapp.New(
@@ -101,7 +105,7 @@ func main() {
 			UserSaver:    pgStorage,
 			UserProvider: pgStorage,
 			AppManager:   appStorage,
-			TokenManager: pgStorage,
+			TokenManager: tokenStorage,
 		},
 	)
 	go func() {

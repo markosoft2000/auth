@@ -30,3 +30,4 @@ redis:
 caching:
   enabled: false
   app_ttl: 1m
+  refresh_token_ttl: 24h

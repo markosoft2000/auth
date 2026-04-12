@@ -58,8 +58,9 @@ type RedisConfig struct {
 }
 
 type CachingConfig struct {
-	Enabled bool          `yaml:"enabled" env-default:"false"`
-	AppTTL  time.Duration `yaml:"app_ttl" env-default:"1m"`
+	Enabled         bool          `yaml:"enabled" env-default:"false"`
+	AppTTL          time.Duration `yaml:"app_ttl" env-default:"1m"`
+	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl" env-default:"24h"`
 }
 
 var once sync.Once

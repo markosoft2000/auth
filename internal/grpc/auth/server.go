@@ -52,7 +52,7 @@ type Auth interface {
 		appSecret []byte,
 	) (id int, err error)
 
-	RemoveApp(ctx context.Context, appId int) error
+	RemoveApp(ctx context.Context, appID int) error
 }
 
 type serverAPI struct {

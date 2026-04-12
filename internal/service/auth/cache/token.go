@@ -48,7 +48,7 @@ func (c *tokenCache) RefreshToken(
 func (c *tokenCache) SaveRefreshToken(
 	ctx context.Context,
 	userID int64,
-	appId int,
+	appID int,
 	token string,
 	expiresAt time.Time,
 	ip netip.Addr,
@@ -57,18 +57,22 @@ func (c *tokenCache) SaveRefreshToken(
 
 	log := c.log.With(slog.String("op", op))
 
-	cacheErr := c.cache.SaveRefreshToken(ctx, userID, appId, token, expiresAt, ip)
+	nextErr := c.next.SaveRefreshToken(ctx, userID, appID, token, expiresAt, ip)
+
+	cacheErr := c.cache.SaveRefreshToken(ctx, userID, appID, token, expiresAt, ip)
 	if cacheErr != nil {
 		log.Error("failed to save token to cache", slog.Any("error", cacheErr))
 	}
 
-	return c.next.SaveRefreshToken(ctx, userID, appId, token, expiresAt, ip)
+	return nextErr
 }
 
 func (c *tokenCache) RevokeToken(ctx context.Context, token string) error {
 	const op = "cache.TokenCache.RevokeToken"
 
 	log := c.log.With(slog.String("op", op))
+
+	nextErr := c.next.RevokeToken(ctx, token)
 
 	cacheErr := c.cache.RevokeToken(ctx, token)
 	if cacheErr != nil {
@@ -77,13 +81,24 @@ func (c *tokenCache) RevokeToken(ctx context.Context, token string) error {
 		}
 	}
 
-	return c.next.RevokeToken(ctx, token)
+	return nextErr
 }
 
-func (c *tokenCache) RevokeAllUserTokens(ctx context.Context, userId int64) error {
-	return c.next.RevokeAllUserTokens(ctx, userId)
+func (c *tokenCache) RevokeAllUserTokens(ctx context.Context, userID int64) error {
+	return c.next.RevokeAllUserTokens(ctx, userID)
 }
 
-func (c *tokenCache) RevokeAllAppTokens(ctx context.Context, appId int) error {
-	return c.next.RevokeAllAppTokens(ctx, appId)
+func (c *tokenCache) RevokeAllAppTokens(ctx context.Context, appID int) error {
+	const op = "cache.TokenCache.RevokeAllAppTokens"
+
+	log := c.log.With(slog.String("op", op))
+
+	nextErr := c.next.RevokeAllAppTokens(ctx, appID)
+
+	cacheErr := c.cache.RevokeAllAppTokens(ctx, appID)
+	if cacheErr != nil {
+		log.Error("failed to revoke all tokens for app in cache", slog.Any("error", cacheErr))
+	}
+
+	return nextErr
 }

@@ -62,7 +62,7 @@ type TokenManager interface {
 	SaveRefreshToken(
 		ctx context.Context,
 		userID int64,
-		appId int,
+		appID int,
 		token string,
 		expiresAt time.Time,
 		ip netip.Addr,
@@ -70,8 +70,8 @@ type TokenManager interface {
 
 	RevokeToken(ctx context.Context, token string) error
 
-	RevokeAllUserTokens(ctx context.Context, userId int64) error
-	RevokeAllAppTokens(ctx context.Context, appId int) error
+	RevokeAllUserTokens(ctx context.Context, userID int64) error
+	RevokeAllAppTokens(ctx context.Context, appID int) error
 }
 
 var (

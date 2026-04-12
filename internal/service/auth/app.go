@@ -46,13 +46,13 @@ func (a *Auth) AddApp(ctx context.Context, appName string, appSecret []byte) (id
 }
 
 // RemoveApp deletes app
-func (a *Auth) RemoveApp(ctx context.Context, appId int) error {
+func (a *Auth) RemoveApp(ctx context.Context, appID int) error {
 	const op = "auth.RemoveApp"
-	log := a.log.With(slog.String("op", op), slog.Int("app_id", appId))
+	log := a.log.With(slog.String("op", op), slog.Int("app_id", appID))
 
 	log.Info("removing app")
 
-	err := a.appManager.DeleteApp(ctx, appId)
+	err := a.appManager.DeleteApp(ctx, appID)
 	if err != nil {
 		if errors.Is(err, storage.ErrAppNotFound) {
 			log.Error("app not found", slog.Any("error", err))
@@ -65,10 +65,10 @@ func (a *Auth) RemoveApp(ctx context.Context, appId int) error {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	log.Warn("Revoking all refresh tokens for APP ID", slog.Int("app_id", appId))
+	log.Warn("Revoking all refresh tokens for APP ID", slog.Int("app_id", appID))
 
 	// clean up all refresh tokens associated with that app_id to ensure no active sessions remain
-	err = a.tokenManager.RevokeAllAppTokens(ctx, appId)
+	err = a.tokenManager.RevokeAllAppTokens(ctx, appID)
 	if err != nil {
 		log.Error("failed to revoke all refresh token for the app", slog.Any("error", err))
 

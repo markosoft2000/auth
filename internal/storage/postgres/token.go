@@ -15,7 +15,7 @@ import (
 func (s *Storage) SaveRefreshToken(
 	ctx context.Context,
 	userID int64,
-	appId int,
+	appID int,
 	token string,
 	expiresAt time.Time,
 	ip netip.Addr,
@@ -24,7 +24,7 @@ func (s *Storage) SaveRefreshToken(
 
 	query := "INSERT INTO refresh_tokens(user_id, app_id, token, expires_at, ip_address) VALUES($1, $2, $3, $4, $5)"
 
-	_, err := s.pool.Exec(ctx, query, userID, appId, token, expiresAt, ip)
+	_, err := s.pool.Exec(ctx, query, userID, appID, token, expiresAt, ip)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -71,12 +71,12 @@ func (s *Storage) RevokeToken(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *Storage) RevokeAllUserTokens(ctx context.Context, userId int64) error {
+func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 	const op = "storage.postgres.RevokeAllUserTokens"
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 and revoked = FALSE"
 
-	_, err := s.pool.Exec(ctx, query, userId)
+	_, err := s.pool.Exec(ctx, query, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
@@ -88,12 +88,12 @@ func (s *Storage) RevokeAllUserTokens(ctx context.Context, userId int64) error {
 	return nil
 }
 
-func (s *Storage) RevokeAllAppTokens(ctx context.Context, appId int) error {
+func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 	const op = "storage.postgres.RevokeAllAppTokens"
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE app_id = $1 and revoked = FALSE"
 
-	_, err := s.pool.Exec(ctx, query, appId)
+	_, err := s.pool.Exec(ctx, query, appID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)

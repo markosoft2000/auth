@@ -14,8 +14,8 @@ const (
 	appPrefix = "app:"
 )
 
-func getAppKey(appId int) string {
-	return appPrefix + strconv.Itoa(appId)
+func getAppKey(appID int) string {
+	return appPrefix + strconv.Itoa(appID)
 }
 
 // App provides app

@@ -69,7 +69,7 @@ docker-down:
 
 # Rebuild the app and restart it without touching the DB
 docker-reload:
-	sudo docker compose up --build -d app
+	docker compose up --build -d --no-deps --force-recreate app
 
 # Database migration up (inside Docker)
 docker-migrate-up:

@@ -25,8 +25,10 @@ postgres:
   database: "auth_db"
   ssl_mode: "disable"
 redis:
-  host: "redis"
-  port: 6379
+  addresses:
+    - "redis-1:6379"
+    - "redis-2:6379"
+    - "redis-3:6379"
 caching:
   enabled: false
   app_ttl: 1m

@@ -53,8 +53,7 @@ type PostgresConfig struct {
 }
 
 type RedisConfig struct {
-	Host string `yaml:"host" env:"REDIS_HOST" env-default:"localhost"`
-	Port int    `yaml:"port" env:"REDIS_PORT" env-default:"6379"`
+	Addresses []string `yaml:"addresses"`
 }
 
 type CachingConfig struct {

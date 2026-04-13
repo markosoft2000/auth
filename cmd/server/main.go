@@ -80,8 +80,7 @@ func main() {
 
 	if cfg.Caching.Enabled {
 		redisStorage, err = redis.New(redis.Config{
-			Host:            cfg.Redis.Host,
-			Port:            cfg.Redis.Port,
+			Addresses:       cfg.Redis.Addresses,
 			AppTTL:          cfg.Caching.AppTTL,
 			RefreshTokenTTL: cfg.Caching.RefreshTokenTTL,
 		})

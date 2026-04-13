@@ -9,8 +9,7 @@ import (
 )
 
 type Config struct {
-	Host string
-	Port int
+	Addresses []string
 
 	AppTTL          time.Duration
 	RefreshTokenTTL time.Duration
@@ -25,9 +24,7 @@ func New(cfg Config) (*Storage, error) {
 	const op = "storage.redis.New"
 
 	c, err := rueidis.NewClient(rueidis.ClientOption{
-		InitAddress: []string{
-			fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-		},
+		InitAddress: cfg.Addresses,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)

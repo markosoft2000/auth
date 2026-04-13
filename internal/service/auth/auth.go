@@ -57,6 +57,7 @@ type TokenManager interface {
 	RefreshToken(
 		ctx context.Context,
 		token string,
+		appID int,
 	) (*models.RefreshToken, error)
 
 	SaveRefreshToken(
@@ -68,7 +69,7 @@ type TokenManager interface {
 		ip netip.Addr,
 	) error
 
-	RevokeToken(ctx context.Context, token string) error
+	RevokeToken(ctx context.Context, token string, appID int) error
 
 	RevokeAllUserTokens(ctx context.Context, userID int64) error
 	RevokeAllAppTokens(ctx context.Context, appID int) error
@@ -312,7 +313,7 @@ func (a *Auth) RefreshToken(
 
 		Only 'revoke token' operation should delete the related cached token
 	*/
-	storedRefreshToken, err := a.tokenManager.RefreshToken(ctx, refreshToken)
+	storedRefreshToken, err := a.tokenManager.RefreshToken(ctx, refreshToken, app.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrRefreshTokenNotFound) {
 			log.Error("refresh token not found", slog.Any("error", err))
@@ -396,7 +397,7 @@ func (a *Auth) RefreshToken(
 		return "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	err = a.tokenManager.RevokeToken(ctx, refreshToken)
+	err = a.tokenManager.RevokeToken(ctx, refreshToken, app.ID)
 	if err != nil {
 		log.Error("failed to revoke refresh token", slog.Any("error", err))
 

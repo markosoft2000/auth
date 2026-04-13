@@ -31,10 +31,11 @@ func NewTokenCache(log *slog.Logger, cache auth.TokenManager, next auth.TokenMan
 func (c *tokenCache) RefreshToken(
 	ctx context.Context,
 	token string,
+	appID int,
 ) (*models.RefreshToken, error) {
-	storedToken, cacheErr := c.cache.RefreshToken(ctx, token)
+	storedToken, cacheErr := c.cache.RefreshToken(ctx, token, appID)
 	if cacheErr != nil {
-		storedToken, nextErr := c.next.RefreshToken(ctx, token)
+		storedToken, nextErr := c.next.RefreshToken(ctx, token, appID)
 		if nextErr != nil {
 			return nil, nextErr
 		}
@@ -67,14 +68,14 @@ func (c *tokenCache) SaveRefreshToken(
 	return nextErr
 }
 
-func (c *tokenCache) RevokeToken(ctx context.Context, token string) error {
+func (c *tokenCache) RevokeToken(ctx context.Context, token string, appID int) error {
 	const op = "cache.TokenCache.RevokeToken"
 
 	log := c.log.With(slog.String("op", op))
 
-	nextErr := c.next.RevokeToken(ctx, token)
+	nextErr := c.next.RevokeToken(ctx, token, appID)
 
-	cacheErr := c.cache.RevokeToken(ctx, token)
+	cacheErr := c.cache.RevokeToken(ctx, token, appID)
 	if cacheErr != nil {
 		if !errors.Is(cacheErr, storage.ErrRefreshTokenNotFound) {
 			log.Error("failed to delete token from cache", slog.Any("error", cacheErr))

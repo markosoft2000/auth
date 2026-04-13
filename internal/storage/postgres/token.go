@@ -35,6 +35,7 @@ func (s *Storage) SaveRefreshToken(
 func (s *Storage) RefreshToken(
 	ctx context.Context,
 	token string,
+	appID int,
 ) (*models.RefreshToken, error) {
 	const op = "storage.postgres.RefreshToken"
 
@@ -54,7 +55,7 @@ func (s *Storage) RefreshToken(
 	return tokenModel, nil
 }
 
-func (s *Storage) RevokeToken(ctx context.Context, token string) error {
+func (s *Storage) RevokeToken(ctx context.Context, token string, appID int) error {
 	const op = "storage.postgres.RevokeToken"
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE token = $1"

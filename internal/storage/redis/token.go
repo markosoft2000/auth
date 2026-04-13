@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/markosoft2000/auth/internal/domain/models"
@@ -13,27 +14,28 @@ import (
 )
 
 const (
-	tokenPrefix  = "refresh-token:"
-	appTagPrefix = "tag:"
+	tokenKey = "{app:%d}:refresh-token:%s"
+	appTag   = "{app:%d}:tag"
 
 	deleteAppTokenLimit = 100
 )
 
-func getTokenKey(token string) string {
-	return tokenPrefix + token
+func getTokenKey(token string, appID int) string {
+	return fmt.Sprintf(tokenKey, appID, token)
 }
 
 func getAppTagKey(appID int) string {
-	return appTagPrefix + getAppKey(appID)
+	return fmt.Sprintf(appTag, appID)
 }
 
 func (s *Storage) RefreshToken(
 	ctx context.Context,
 	token string,
+	appID int,
 ) (*models.RefreshToken, error) {
 	const op = "storage.redis.RefreshToken"
 
-	key := getTokenKey(token)
+	key := getTokenKey(token, appID)
 
 	resp := s.client.Do(ctx, s.client.B().Get().Key(key).Build())
 
@@ -77,7 +79,7 @@ func (s *Storage) SaveRefreshToken(
 ) error {
 	const op = "storage.redis.SaveRefreshToken"
 
-	key := getTokenKey(token)
+	key := getTokenKey(token, appID)
 	tag := getAppTagKey(appID)
 	data, err := ip.MarshalBinary()
 	if err != nil {
@@ -86,7 +88,8 @@ func (s *Storage) SaveRefreshToken(
 
 	// 1. Save the token
 	// 2. Add the token key to the app's tag set
-	cmds := make(rueidis.Commands, 0, 2)
+	// 3. Add expire timeout for the tag
+	cmds := make(rueidis.Commands, 0, 3)
 	cmds = append(
 		cmds,
 		s.client.B().Set().
@@ -96,6 +99,13 @@ func (s *Storage) SaveRefreshToken(
 			Build(),
 	)
 	cmds = append(cmds, s.client.B().Sadd().Key(tag).Member(key).Build())
+	cmds = append(
+		cmds,
+		s.client.B().Expire().
+			Key(tag).
+			Seconds(int64(s.cfg.RefreshTokenTTL.Seconds())).
+			Build(),
+	)
 
 	for _, res := range s.client.DoMulti(ctx, cmds...) {
 		if err := res.Error(); err != nil {
@@ -106,15 +116,22 @@ func (s *Storage) SaveRefreshToken(
 	return nil
 }
 
-func (s *Storage) RevokeToken(ctx context.Context, token string) error {
+func (s *Storage) RevokeToken(
+	ctx context.Context,
+	token string,
+	appID int,
+) error {
 	const op = "storage.redis.RevokeToken"
 
-	key := getTokenKey(token)
+	key := getTokenKey(token, appID)
 
 	resp := s.client.Do(ctx, s.client.B().Del().Key(key).Build())
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("%s: internal failure: %w", op, err)
 	}
+
+	tag := getAppTagKey(appID)
+	s.client.Do(ctx, s.client.B().Srem().Key(tag).Member(key).Build())
 
 	// Detect "No Such Key"
 	count, _ := resp.AsInt64()
@@ -137,74 +154,138 @@ func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 	const op = "storage.redis.RevokeAllAppTokens"
 
 	tag := getAppTagKey(appID)
-	var cursor uint64
 
-	// remove tag members - tokens with app-tag
-	for {
-		chunkCtx, chunkCancel := context.WithTimeout(ctx, time.Second)
+	// Get all master nodes in the cluster
+	nodes := s.client.Nodes()
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(nodes))
 
-		resp := s.client.Do(
-			chunkCtx,
-			s.client.B().
-				Sscan().
-				Key(tag).
-				Cursor(cursor).
-				Count(deleteAppTokenLimit).
-				Build(),
-		)
-		chunkCancel()
-		if err := resp.Error(); err != nil {
-			// Check if it's a timeout error
-			if errors.Is(err, context.DeadlineExceeded) {
-				// If the main ctx time is up, we must stop
-				if ctx.Err() != nil {
-					return fmt.Errorf("%s: main timeout exceeded: %w", op, ctx.Err())
-				}
+	for nodeName, node := range nodes {
+		wg.Add(1)
 
-				// Otherwise, it was just a slow chunk. retry.
-				continue
-			}
+		go func(nodeName string, n rueidis.Client) {
+			defer wg.Done()
 
-			return fmt.Errorf("%s: %w", op, err)
-		}
+			var cursor uint64
+			var errs error
 
-		entry, _ := resp.AsScanEntry()
+			// remove tag members - tokens with app-tag
+			for {
+				chunkCtx, chunkCancel := context.WithTimeout(ctx, time.Second)
 
-		if len(entry.Elements) > 0 {
-			chunkCtx, chunkCancel := context.WithTimeout(ctx, time.Second)
+				resp := s.client.Do(
+					chunkCtx,
+					s.client.B().
+						Sscan().
+						Key(tag).
+						Cursor(cursor).
+						Count(deleteAppTokenLimit).
+						Build(),
+				)
+				chunkCancel()
+				if err := resp.Error(); err != nil {
+					// Check if it's a timeout error
+					if errors.Is(err, context.DeadlineExceeded) {
+						// If the main ctx time is up, we must stop
+						if ctx.Err() != nil {
+							errs = errors.Join(
+								errs,
+								fmt.Errorf(
+									"%s: main timeout exceeded on node %s: %w",
+									op,
+									nodeName,
+									ctx.Err(),
+								),
+							)
 
-			err := s.client.Do(
-				chunkCtx,
-				s.client.B().Del().Key(entry.Elements...).Build(),
-			).Error()
-			chunkCancel()
-			if err != nil {
-				// Check if it's a timeout error
-				if errors.Is(err, context.DeadlineExceeded) {
-					// If the main ctx time is up, we must stop
-					if ctx.Err() != nil {
-						return fmt.Errorf("%s: main timeout exceeded: %w", op, ctx.Err())
+							break
+						}
+
+						// Otherwise, it was just a slow chunk. retry.
+						continue
 					}
 
-					// Otherwise, it was just a slow chunk. retry.
-					continue
+					errs = errors.Join(
+						errs,
+						fmt.Errorf("%s on node %s: %w", op, nodeName, err),
+					)
 				}
 
-				return fmt.Errorf("%s: %w", op, err)
+				entry, _ := resp.AsScanEntry()
+
+				if len(entry.Elements) > 0 {
+				RetryDelete:
+					delCtx, delCancel := context.WithTimeout(ctx, time.Second)
+
+					err := s.client.Do(
+						delCtx,
+						s.client.B().
+							Del().
+							Key(entry.Elements...).
+							Build(),
+					).Error()
+					delCancel()
+
+					if err != nil {
+						// Check if it's a timeout error
+						if errors.Is(err, context.DeadlineExceeded) {
+							// If the main ctx time is up, we must stop
+							if ctx.Err() != nil {
+								errs = errors.Join(
+									errs,
+									fmt.Errorf(
+										"%s: main timeout exceeded on node %s: %w",
+										op,
+										nodeName,
+										ctx.Err(),
+									),
+								)
+								break
+							}
+
+							// Otherwise, it was just a slow chunk. retry.
+							goto RetryDelete
+						}
+
+						errs = errors.Join(
+							errs,
+							fmt.Errorf("%s on node %s: %w", op, nodeName, err),
+						)
+					}
+				}
+
+				cursor = entry.Cursor
+				if cursor == 0 {
+					break
+				}
 			}
-		}
 
-		cursor = entry.Cursor
-		if cursor == 0 {
-			break
+			// remove the tag index itself
+			err := s.client.Do(ctx, s.client.B().Del().Key(tag).Build()).Error()
+			if err != nil {
+				errs = errors.Join(
+					errs,
+					fmt.Errorf("%s on node %s: %w", op, nodeName, err),
+				)
+			}
+
+			if errs != nil {
+				errChan <- errs
+			}
+
+		}(nodeName, node)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors during the parallel scan
+	var errs error
+	for err := range errChan {
+		if err != nil {
+			errs = errors.Join(errs, err)
 		}
 	}
 
-	// remove the tag index itself
-	err := s.client.Do(ctx, s.client.B().Del().Key(tag).Build()).Error()
-	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
-	}
-
-	return nil
+	return errs
 }

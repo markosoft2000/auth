@@ -60,14 +60,7 @@ type TokenManager interface {
 		appID int,
 	) (*models.RefreshToken, error)
 
-	SaveRefreshToken(
-		ctx context.Context,
-		userID int64,
-		appID int,
-		token string,
-		expiresAt time.Time,
-		ip netip.Addr,
-	) error
+	SaveRefreshToken(ctx context.Context, token *models.RefreshToken) error
 
 	RevokeToken(ctx context.Context, token string, appID int) error
 
@@ -86,36 +79,43 @@ var (
 	ErrInvalidIpAddress     = errors.New("invalid IP address for the session")
 )
 
+type AuthCfg struct {
+	TokenTTL               time.Duration
+	RefreshTokenTTL        time.Duration
+	ReissueRefreshTokenTTL time.Duration
+}
+
 type Auth struct {
-	log             *slog.Logger
-	tokenTTL        time.Duration
-	refreshTokenTTL time.Duration
-	hasher          Hasher
-	cipher          Cipher
-	userSaver       UserSaver
-	userProvider    UserProvider
-	appManager      AppManager
-	tokenManager    TokenManager
+	log                    *slog.Logger
+	tokenTTL               time.Duration
+	refreshTokenTTL        time.Duration
+	reissueRefreshTokenTTL time.Duration
+	hasher                 Hasher
+	cipher                 Cipher
+	userSaver              UserSaver
+	userProvider           UserProvider
+	appManager             AppManager
+	tokenManager           TokenManager
 }
 
 func New(
 	log *slog.Logger,
-	tokenTTL time.Duration,
-	refreshTokenTTL time.Duration,
+	cfg AuthCfg,
 	hasher Hasher,
 	cipher Cipher,
 	storage Storage,
 ) *Auth {
 	return &Auth{
-		log:             log,
-		tokenTTL:        tokenTTL,
-		refreshTokenTTL: refreshTokenTTL,
-		hasher:          hasher,
-		cipher:          cipher,
-		userSaver:       storage.UserSaver,
-		userProvider:    storage.UserProvider,
-		appManager:      storage.AppManager,
-		tokenManager:    storage.TokenManager,
+		log:                    log,
+		tokenTTL:               cfg.TokenTTL,
+		refreshTokenTTL:        cfg.RefreshTokenTTL,
+		reissueRefreshTokenTTL: cfg.ReissueRefreshTokenTTL,
+		hasher:                 hasher,
+		cipher:                 cipher,
+		userSaver:              storage.UserSaver,
+		userProvider:           storage.UserProvider,
+		appManager:             storage.AppManager,
+		tokenManager:           storage.TokenManager,
 	}
 }
 
@@ -228,7 +228,17 @@ func (a *Auth) Login(
 		return "", "", fmt.Errorf("invalid IP format - %s: %w", op, err)
 	}
 
-	err = a.tokenManager.SaveRefreshToken(ctx, user.ID, app.ID, refreshToken, time.Now().Add(a.refreshTokenTTL), netIP)
+	err = a.tokenManager.SaveRefreshToken(
+		ctx,
+		&models.RefreshToken{
+			UserID:     user.ID,
+			AppID:      app.ID,
+			Token:      refreshToken,
+			IP_address: netIP,
+			CreatedAt:  time.Now(),
+			ExpiresAt:  time.Now().Add(a.refreshTokenTTL),
+		},
+	)
 	if err != nil {
 		log.Error("failed to save refresh token", slog.Any("error", err))
 
@@ -329,7 +339,7 @@ func (a *Auth) RefreshToken(
 	// security section
 	// if the token revoked
 	if storedRefreshToken.Revoked {
-		log.Warn("token revoked")
+		log.Warn("revoked token was used. revoking all user tokens for all app due to a possible attack")
 
 		err := a.tokenManager.RevokeAllUserTokens(ctx, user.ID)
 		if err != nil {
@@ -376,33 +386,40 @@ func (a *Auth) RefreshToken(
 	}
 
 	// refresh token rotation
-	newRefreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, decryptedAppSecret)
-	if err != nil {
-		log.Error("failed to generate refreshToken", slog.Any("error", err))
+	if time.Since(storedRefreshToken.CreatedAt) > a.reissueRefreshTokenTTL {
+		newRefreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, decryptedAppSecret)
+		if err != nil {
+			log.Error("failed to generate refreshToken", slog.Any("error", err))
 
-		return "", "", fmt.Errorf("%s: %w", op, err)
+			return "", "", fmt.Errorf("%s: %w", op, err)
+		}
+
+		err = a.tokenManager.SaveRefreshToken(
+			ctx,
+			&models.RefreshToken{
+				UserID:     user.ID,
+				AppID:      app.ID,
+				Token:      newRefreshToken,
+				IP_address: storedRefreshToken.IP_address,
+				CreatedAt:  storedRefreshToken.CreatedAt,
+				ExpiresAt:  time.Now().Add(a.refreshTokenTTL),
+			},
+		)
+		if err != nil {
+			log.Error("failed to save refresh token", slog.Any("error", err))
+
+			return "", "", fmt.Errorf("%s: %w", op, err)
+		}
+
+		err = a.tokenManager.RevokeToken(ctx, refreshToken, app.ID)
+		if err != nil {
+			log.Error("failed to revoke refresh token", slog.Any("error", err))
+
+			return "", "", fmt.Errorf("%s: %w", op, err)
+		}
+
+		return newAccessToken, newRefreshToken, nil
 	}
 
-	err = a.tokenManager.SaveRefreshToken(
-		ctx,
-		user.ID,
-		app.ID,
-		newRefreshToken,
-		time.Now().Add(a.refreshTokenTTL),
-		storedRefreshToken.IP_address,
-	)
-	if err != nil {
-		log.Error("failed to save refresh token", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	err = a.tokenManager.RevokeToken(ctx, refreshToken, app.ID)
-	if err != nil {
-		log.Error("failed to revoke refresh token", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	return newAccessToken, newRefreshToken, nil
+	return newAccessToken, "", nil
 }

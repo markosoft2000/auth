@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/netip"
-	"time"
 
 	"github.com/markosoft2000/auth/internal/domain/models"
 	_ "github.com/markosoft2000/auth/internal/domain/models"
@@ -48,19 +46,15 @@ func (c *tokenCache) RefreshToken(
 
 func (c *tokenCache) SaveRefreshToken(
 	ctx context.Context,
-	userID int64,
-	appID int,
-	token string,
-	expiresAt time.Time,
-	ip netip.Addr,
+	token *models.RefreshToken,
 ) error {
 	const op = "cache.TokenCache.SaveRefreshToken"
 
 	log := c.log.With(slog.String("op", op))
 
-	nextErr := c.next.SaveRefreshToken(ctx, userID, appID, token, expiresAt, ip)
+	nextErr := c.next.SaveRefreshToken(ctx, token)
 
-	cacheErr := c.cache.SaveRefreshToken(ctx, userID, appID, token, expiresAt, ip)
+	cacheErr := c.cache.SaveRefreshToken(ctx, token)
 	if cacheErr != nil {
 		log.Error("failed to save token to cache", slog.Any("error", cacheErr))
 	}

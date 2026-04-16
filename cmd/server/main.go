@@ -97,8 +97,11 @@ func main() {
 	grpcApp := grpcapp.New(
 		log,
 		cfg.GRPC.Port,
-		cfg.TokenTTL,
-		cfg.RefreshTokenTTL,
+		auth.AuthCfg{
+			TokenTTL:               cfg.TokenTTL,
+			RefreshTokenTTL:        cfg.RefreshTokenTTL,
+			ReissueRefreshTokenTTL: cfg.ReissueRefreshTokenTTL,
+		},
 		hasher,
 		cipher,
 		auth.Storage{

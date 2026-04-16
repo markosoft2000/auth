@@ -2,9 +2,9 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"net/netip"
 	"sync"
 	"time"
 
@@ -17,7 +17,7 @@ const (
 	tokenKey = "{app:%d}:refresh-token:%s"
 	appTag   = "{app:%d}:tag"
 
-	deleteAppTokenLimit = 100
+	deleteAppTokenLimit = 10000
 )
 
 func getTokenKey(token string, appID int) string {
@@ -60,36 +60,28 @@ func (s *Storage) RefreshToken(
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	var ip netip.Addr
-	err = ip.UnmarshalBinary(data)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
+	storedToken := &models.RefreshToken{}
+	if err := json.Unmarshal(data, &storedToken); err != nil {
+		return nil, fmt.Errorf("%s: unmarshaling: %w", op, err)
 	}
 
-	return &models.RefreshToken{
-		Token:      token,
-		IP_address: ip,
-	}, nil
+	return storedToken, nil
 }
 
 func (s *Storage) SaveRefreshToken(
 	ctx context.Context,
-	userID int64,
-	appID int,
-	token string,
-	expiresAt time.Time,
-	ip netip.Addr,
+	token *models.RefreshToken,
 ) error {
 	const op = "storage.redis.SaveRefreshToken"
 
 	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
 	defer OpCancel()
 
-	key := getTokenKey(token, appID)
-	tag := getAppTagKey(appID)
-	data, err := ip.MarshalBinary()
+	key := getTokenKey(token.Token, token.AppID)
+	tag := getAppTagKey(token.AppID)
+	data, err := json.Marshal(token)
 	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
+		return fmt.Errorf("%s: marshaling: %w", op, err)
 	}
 
 	// 1. Save the token
@@ -133,17 +125,19 @@ func (s *Storage) RevokeToken(
 	defer OpCancel()
 
 	key := getTokenKey(token, appID)
+	tag := getAppTagKey(appID)
 
-	resp := s.client.Do(ctxOp, s.client.B().Del().Key(key).Build())
-	if err := resp.Error(); err != nil {
+	cmds := make(rueidis.Commands, 0, 2)
+	cmds = append(cmds, s.client.B().Del().Key(key).Build())
+	cmds = append(cmds, s.client.B().Srem().Key(tag).Member(key).Build())
+	resps := s.client.DoMulti(ctxOp, cmds...)
+
+	if err := resps[0].Error(); err != nil {
 		return fmt.Errorf("%s: internal failure: %w", op, err)
 	}
 
-	tag := getAppTagKey(appID)
-	s.client.Do(ctxOp, s.client.B().Srem().Key(tag).Member(key).Build())
-
 	// Detect "No Such Key"
-	count, _ := resp.AsInt64()
+	count, _ := resps[0].AsInt64()
 	if count == 0 {
 		return fmt.Errorf(
 			"%s: refresh token not found: %w",

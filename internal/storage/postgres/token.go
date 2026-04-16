@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/netip"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/markosoft2000/auth/internal/domain/models"
@@ -14,17 +12,21 @@ import (
 
 func (s *Storage) SaveRefreshToken(
 	ctx context.Context,
-	userID int64,
-	appID int,
-	token string,
-	expiresAt time.Time,
-	ip netip.Addr,
+	token *models.RefreshToken,
 ) error {
 	const op = "storage.postgres.SaveRefreshToken"
 
-	query := "INSERT INTO refresh_tokens(user_id, app_id, token, expires_at, ip_address) VALUES($1, $2, $3, $4, $5)"
+	query := "INSERT INTO refresh_tokens(user_id, app_id, token, expires_at, created_at, ip_address) VALUES($1, $2, $3, $4, $5, $6)"
 
-	_, err := s.pool.Exec(ctx, query, userID, appID, token, expiresAt, ip)
+	_, err := s.pool.Exec(
+		ctx, query,
+		token.UserID,
+		token.AppID,
+		token.Token,
+		token.ExpiresAt,
+		token.CreatedAt,
+		token.IP_address,
+	)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -39,11 +41,20 @@ func (s *Storage) RefreshToken(
 ) (*models.RefreshToken, error) {
 	const op = "storage.postgres.RefreshToken"
 
-	tokenModel := &models.RefreshToken{}
+	tokenModel := &models.RefreshToken{
+		Token: token,
+	}
 
-	query := "SELECT user_id, revoked, ip_address FROM refresh_tokens WHERE token = $1"
+	query := "SELECT user_id, app_id, expires_at, created_at, revoked, ip_address FROM refresh_tokens WHERE token = $1"
 
-	err := s.pool.QueryRow(ctx, query, token).Scan(&tokenModel.UserID, &tokenModel.Revoked, &tokenModel.IP_address)
+	err := s.pool.QueryRow(ctx, query, token).Scan(
+		&tokenModel.UserID,
+		&tokenModel.AppID,
+		&tokenModel.ExpiresAt,
+		&tokenModel.CreatedAt,
+		&tokenModel.Revoked,
+		&tokenModel.IP_address,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)

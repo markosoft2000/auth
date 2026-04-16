@@ -10,16 +10,17 @@ import (
 )
 
 type Config struct {
-	Env             string           `yaml:"env" env:"ENV" env-default:"local"`
-	Postgres        PostgresConfig   `yaml:"postgres"`
-	HTTPServer      HTTPServerConfig `yaml:"http_server"`
-	GRPC            GRPCConfig       `yaml:"grpc"`
-	TokenTTL        time.Duration    `yaml:"token_ttl" env-default:"1h"`
-	RefreshTokenTTL time.Duration    `yaml:"refresh_token_ttl" env-default:"30d"`
-	Hasher          HasherConfig     `yaml:"hasher"`
-	MasterSecret    string           `yaml:"master_secret"`
-	Redis           RedisConfig      `yaml:"redis"`
-	Caching         CachingConfig    `yaml:"caching"`
+	Env                    string           `yaml:"env" env:"ENV" env-default:"local"`
+	Postgres               PostgresConfig   `yaml:"postgres"`
+	HTTPServer             HTTPServerConfig `yaml:"http_server"`
+	GRPC                   GRPCConfig       `yaml:"grpc"`
+	TokenTTL               time.Duration    `yaml:"token_ttl" env-default:"1h"`
+	RefreshTokenTTL        time.Duration    `yaml:"refresh_token_ttl" env-default:"720h"`
+	ReissueRefreshTokenTTL time.Duration    `yaml:"reissue_refresh_token_ttl" env-default:"24h"`
+	Hasher                 HasherConfig     `yaml:"hasher"`
+	MasterSecret           string           `yaml:"master_secret"`
+	Redis                  RedisConfig      `yaml:"redis"`
+	Caching                CachingConfig    `yaml:"caching"`
 }
 
 type HTTPServerConfig struct {

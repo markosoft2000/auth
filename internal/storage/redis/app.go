@@ -22,6 +22,10 @@ func getAppKey(appID int) string {
 func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	const op = "storage.redis.App"
 
+	if err := s.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("%s: could not ping redis: %w", op, err)
+	}
+
 	key := getAppKey(appID)
 
 	resp := s.client.Do(ctx, s.client.B().Get().Key(key).Build())
@@ -50,6 +54,10 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err error) {
 	const op = "storage.redis.SaveApp"
 
+	if err := s.Ping(ctx); err != nil {
+		return 0, fmt.Errorf("%s: could not ping redis: %w", op, err)
+	}
+
 	key := getAppKey(app.ID)
 
 	err = s.client.Do(ctx, s.client.B().Set().
@@ -68,6 +76,10 @@ func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err err
 // DeleteApp deletes app
 func (s *Storage) DeleteApp(ctx context.Context, appID int) error {
 	const op = "storage.redis.DeleteApp"
+
+	if err := s.Ping(ctx); err != nil {
+		return fmt.Errorf("%s: could not ping redis: %w", op, err)
+	}
 
 	key := getAppKey(appID)
 

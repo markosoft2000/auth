@@ -35,6 +35,10 @@ func (s *Storage) RefreshToken(
 ) (*models.RefreshToken, error) {
 	const op = "storage.redis.RefreshToken"
 
+	if err := s.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("%s: could not ping redis: %w", op, err)
+	}
+
 	key := getTokenKey(token, appID)
 
 	resp := s.client.Do(ctx, s.client.B().Get().Key(key).Build())
@@ -78,6 +82,10 @@ func (s *Storage) SaveRefreshToken(
 	ip netip.Addr,
 ) error {
 	const op = "storage.redis.SaveRefreshToken"
+
+	if err := s.Ping(ctx); err != nil {
+		return fmt.Errorf("%s: could not ping redis: %w", op, err)
+	}
 
 	key := getTokenKey(token, appID)
 	tag := getAppTagKey(appID)
@@ -123,6 +131,10 @@ func (s *Storage) RevokeToken(
 ) error {
 	const op = "storage.redis.RevokeToken"
 
+	if err := s.Ping(ctx); err != nil {
+		return fmt.Errorf("%s: could not ping redis: %w", op, err)
+	}
+
 	key := getTokenKey(token, appID)
 
 	resp := s.client.Do(ctx, s.client.B().Del().Key(key).Build())
@@ -152,6 +164,10 @@ func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 
 func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 	const op = "storage.redis.RevokeAllAppTokens"
+
+	if err := s.Ping(ctx); err != nil {
+		return fmt.Errorf("%s: could not ping redis: %w", op, err)
+	}
 
 	tag := getAppTagKey(appID)
 

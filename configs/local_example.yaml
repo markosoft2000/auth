@@ -29,6 +29,7 @@ redis:
     - "redis-1:6379"
     - "redis-2:6379"
     - "redis-3:6379"
+  ping_ttl: 100ms
 caching:
   enabled: false
   app_ttl: 1m

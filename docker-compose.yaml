@@ -25,7 +25,21 @@ services:
           cpus: '1.0'
           memory: 512M
     #command: redis-server --maxmemory 400mb --maxmemory-policy allkeys-lru --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
-    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    restart: always
+    command: 
+      - redis-server
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "no"
+      - --save
+      - ""
+      - --cluster-announce-ip
+      - redis-1
     ports:
       - "7001:6379"
     volumes:
@@ -33,27 +47,32 @@ services:
 
   redis-2:
     <<: *redis-node
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-config-file", "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "no", "--save", "", "--cluster-announce-ip", "redis-2"]
     ports: ["7002:6379"]
     volumes: [redis-2-data:/data]
 
   redis-3:
     <<: *redis-node
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-config-file", "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "no", "--save", "", "--cluster-announce-ip", "redis-3"]
     ports: ["7003:6379"]
     volumes: [redis-3-data:/data]
 
   # Replica Nodes
   redis-4:
     <<: *redis-node
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-config-file", "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "no", "--save", "", "--cluster-announce-ip", "redis-4"]
     ports: ["7004:6379"]
     volumes: [redis-4-data:/data]
 
   redis-5:
     <<: *redis-node
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-config-file", "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "no", "--save", "", "--cluster-announce-ip", "redis-5"]
     ports: ["7005:6379"]
     volumes: [redis-5-data:/data]
 
   redis-6:
     <<: *redis-node
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-config-file", "nodes.conf", "--cluster-node-timeout", "5000", "--appendonly", "no", "--save", "", "--cluster-announce-ip", "redis-6"]
     ports: ["7006:6379"]
     volumes: [redis-6-data:/data]
 
@@ -115,7 +134,7 @@ services:
       db:
         condition: service_healthy
       redis-cluster-creator:
-        condition: service_started
+        condition: service_completed_successfully
       migrator:
         condition: service_completed_successfully
     ports:

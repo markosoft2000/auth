@@ -80,10 +80,10 @@ func main() {
 
 	if cfg.Caching.Enabled {
 		redisStorage, err = redis.New(redis.Config{
-			Addresses:       cfg.Redis.Addresses,
-			PingTTL:         cfg.Redis.PingTTL,
-			AppTTL:          cfg.Caching.AppTTL,
-			RefreshTokenTTL: cfg.Caching.RefreshTokenTTL,
+			Addresses:        cfg.Redis.Addresses,
+			OperationTimeout: cfg.Redis.OperationTimeout,
+			AppTTL:           cfg.Caching.AppTTL,
+			RefreshTokenTTL:  cfg.Caching.RefreshTokenTTL,
 		})
 		if err != nil {
 			log.Error("failed to init redis", slog.Any("error", err))

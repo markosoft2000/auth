@@ -22,13 +22,12 @@ func getAppKey(appID int) string {
 func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	const op = "storage.redis.App"
 
-	if err := s.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("%s: could not ping redis: %w", op, err)
-	}
+	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
+	defer OpCancel()
 
 	key := getAppKey(appID)
 
-	resp := s.client.Do(ctx, s.client.B().Get().Key(key).Build())
+	resp := s.client.Do(ctxOp, s.client.B().Get().Key(key).Build())
 
 	// Handle "Key Not Found" specifically
 	if rueidis.IsRedisNil(resp.Error()) {
@@ -54,13 +53,12 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err error) {
 	const op = "storage.redis.SaveApp"
 
-	if err := s.Ping(ctx); err != nil {
-		return 0, fmt.Errorf("%s: could not ping redis: %w", op, err)
-	}
+	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
+	defer OpCancel()
 
 	key := getAppKey(app.ID)
 
-	err = s.client.Do(ctx, s.client.B().Set().
+	err = s.client.Do(ctxOp, s.client.B().Set().
 		Key(key).
 		Value(string(app.Secret)).
 		Ex(s.cfg.AppTTL).
@@ -77,13 +75,12 @@ func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err err
 func (s *Storage) DeleteApp(ctx context.Context, appID int) error {
 	const op = "storage.redis.DeleteApp"
 
-	if err := s.Ping(ctx); err != nil {
-		return fmt.Errorf("%s: could not ping redis: %w", op, err)
-	}
+	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
+	defer OpCancel()
 
 	key := getAppKey(appID)
 
-	resp := s.client.Do(ctx, s.client.B().Del().Key(key).Build())
+	resp := s.client.Do(ctxOp, s.client.B().Del().Key(key).Build())
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("%s: internal failure: %w", op, err)
 	}

@@ -53,8 +53,8 @@ type PostgresConfig struct {
 }
 
 type RedisConfig struct {
-	Addresses []string      `yaml:"addresses"`
-	PingTTL   time.Duration `yaml:"ping_ttl" env-default:"100ms"`
+	Addresses        []string      `yaml:"addresses"`
+	OperationTimeout time.Duration `yaml:"operation_timeout" env-default:"10ms"`
 }
 
 type CachingConfig struct {

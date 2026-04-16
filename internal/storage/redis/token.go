@@ -35,13 +35,12 @@ func (s *Storage) RefreshToken(
 ) (*models.RefreshToken, error) {
 	const op = "storage.redis.RefreshToken"
 
-	if err := s.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("%s: could not ping redis: %w", op, err)
-	}
+	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
+	defer OpCancel()
 
 	key := getTokenKey(token, appID)
 
-	resp := s.client.Do(ctx, s.client.B().Get().Key(key).Build())
+	resp := s.client.Do(ctxOp, s.client.B().Get().Key(key).Build())
 
 	// Handle "Key Not Found" specifically
 	if rueidis.IsRedisNil(resp.Error()) {
@@ -83,9 +82,8 @@ func (s *Storage) SaveRefreshToken(
 ) error {
 	const op = "storage.redis.SaveRefreshToken"
 
-	if err := s.Ping(ctx); err != nil {
-		return fmt.Errorf("%s: could not ping redis: %w", op, err)
-	}
+	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
+	defer OpCancel()
 
 	key := getTokenKey(token, appID)
 	tag := getAppTagKey(appID)
@@ -115,7 +113,7 @@ func (s *Storage) SaveRefreshToken(
 			Build(),
 	)
 
-	for _, res := range s.client.DoMulti(ctx, cmds...) {
+	for _, res := range s.client.DoMulti(ctxOp, cmds...) {
 		if err := res.Error(); err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
@@ -131,19 +129,18 @@ func (s *Storage) RevokeToken(
 ) error {
 	const op = "storage.redis.RevokeToken"
 
-	if err := s.Ping(ctx); err != nil {
-		return fmt.Errorf("%s: could not ping redis: %w", op, err)
-	}
+	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
+	defer OpCancel()
 
 	key := getTokenKey(token, appID)
 
-	resp := s.client.Do(ctx, s.client.B().Del().Key(key).Build())
+	resp := s.client.Do(ctxOp, s.client.B().Del().Key(key).Build())
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("%s: internal failure: %w", op, err)
 	}
 
 	tag := getAppTagKey(appID)
-	s.client.Do(ctx, s.client.B().Srem().Key(tag).Member(key).Build())
+	s.client.Do(ctxOp, s.client.B().Srem().Key(tag).Member(key).Build())
 
 	// Detect "No Such Key"
 	count, _ := resp.AsInt64()
@@ -164,10 +161,6 @@ func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 
 func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 	const op = "storage.redis.RevokeAllAppTokens"
-
-	if err := s.Ping(ctx); err != nil {
-		return fmt.Errorf("%s: could not ping redis: %w", op, err)
-	}
 
 	tag := getAppTagKey(appID)
 

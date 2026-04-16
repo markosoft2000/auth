@@ -9,8 +9,8 @@ import (
 )
 
 type Config struct {
-	Addresses []string
-	PingTTL   time.Duration
+	Addresses        []string
+	OperationTimeout time.Duration
 
 	AppTTL          time.Duration
 	RefreshTokenTTL time.Duration
@@ -39,13 +39,6 @@ func New(cfg Config) (*Storage, error) {
 		client: c,
 		cfg:    cfg,
 	}, nil
-}
-
-func (s *Storage) Ping(ctx context.Context) error {
-	ctxPing, pingCancel := context.WithTimeout(ctx, s.cfg.PingTTL)
-	defer pingCancel()
-
-	return s.client.Do(ctxPing, s.client.B().Ping().Build()).Error()
 }
 
 func (s *Storage) Stop() {

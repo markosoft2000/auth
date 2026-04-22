@@ -7,15 +7,47 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Storage struct {
-	pool *pgxpool.Pool
+type Config struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Database string
+	SSLMode  string
 }
 
-func New(host string, port int, user, password, dbname, sslmode string) (*Storage, error) {
-	const op = "storage.postgres.New"
+type Storage struct {
+	masterPool  *pgxpool.Pool // uses for writes and transactions (reading or writing)
+	replicaPool *pgxpool.Pool // uses for reads
+}
+
+func New(masterPoolCfg, replicaPoolCfg *Config) (*Storage, error) {
+	rwPool, err := createPool(masterPoolCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	roPool, err := createPool(replicaPoolCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Storage{
+		masterPool:  rwPool,
+		replicaPool: roPool,
+	}, nil
+}
+
+func createPool(cfg *Config) (*pgxpool.Pool, error) {
+	const op = "storage.postgres.createPool"
 
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode,
+		cfg.Host,
+		cfg.Port,
+		cfg.User,
+		cfg.Password,
+		cfg.Database,
+		cfg.SSLMode,
 	)
 
 	pool, err := pgxpool.New(context.Background(), connStr)
@@ -27,9 +59,18 @@ func New(host string, port int, user, password, dbname, sslmode string) (*Storag
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return &Storage{pool: pool}, nil
+	return pool, nil
+}
+
+func (s *Storage) Ping(ctx context.Context) error {
+	if err := s.masterPool.Ping(ctx); err != nil {
+		return err
+	}
+
+	return s.replicaPool.Ping(ctx)
 }
 
 func (s *Storage) Stop() {
-	s.pool.Close()
+	s.masterPool.Close()
+	s.replicaPool.Close()
 }

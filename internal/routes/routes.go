@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func NewRouter(log *slog.Logger, timeout int) *chi.Mux {
+func NewRouter(log *slog.Logger, timeout int, db health.Pinger) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Panic Recovery (Chi's built-in middleware)
@@ -19,7 +19,7 @@ func NewRouter(log *slog.Logger, timeout int) *chi.Mux {
 	r.Use(middleware.Recoverer)
 
 	r.Handle("/metrics", promhttp.Handler())
-	r.Get("/health", health.New(log)) // Health Check endpoint
+	r.Get("/health", health.New(log, db)) // Health Check endpoint
 
 	return r
 }

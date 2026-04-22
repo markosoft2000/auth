@@ -160,7 +160,7 @@ func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 
 	// Get all master nodes in the cluster
 	nodes := s.client.Nodes()
-	var wg sync.WaitGroup
+	wg := &sync.WaitGroup{}
 	errChan := make(chan error, len(nodes))
 
 	for nodeName, node := range nodes {

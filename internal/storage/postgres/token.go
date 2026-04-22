@@ -18,7 +18,7 @@ func (s *Storage) SaveRefreshToken(
 
 	query := "INSERT INTO refresh_tokens(user_id, app_id, token, expires_at, created_at, ip_address) VALUES($1, $2, $3, $4, $5, $6)"
 
-	_, err := s.pool.Exec(
+	_, err := s.masterPool.Exec(
 		ctx, query,
 		token.UserID,
 		token.AppID,
@@ -47,7 +47,7 @@ func (s *Storage) RefreshToken(
 
 	query := "SELECT user_id, app_id, expires_at, created_at, revoked, ip_address FROM refresh_tokens WHERE token = $1"
 
-	err := s.pool.QueryRow(ctx, query, token).Scan(
+	err := s.replicaPool.QueryRow(ctx, query, token).Scan(
 		&tokenModel.UserID,
 		&tokenModel.AppID,
 		&tokenModel.ExpiresAt,
@@ -71,7 +71,7 @@ func (s *Storage) RevokeToken(ctx context.Context, token string, appID int) erro
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE token = $1"
 
-	_, err := s.pool.Exec(ctx, query, token)
+	_, err := s.masterPool.Exec(ctx, query, token)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
@@ -88,7 +88,7 @@ func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 and revoked = FALSE"
 
-	_, err := s.pool.Exec(ctx, query, userID)
+	_, err := s.masterPool.Exec(ctx, query, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
@@ -105,7 +105,7 @@ func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE app_id = $1 and revoked = FALSE"
 
-	_, err := s.pool.Exec(ctx, query, appID)
+	_, err := s.masterPool.Exec(ctx, query, appID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)

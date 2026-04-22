@@ -18,7 +18,7 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	app := &models.App{}
 	query := "SELECT id, name, secret FROM apps WHERE id = $1"
 
-	err := s.pool.QueryRow(ctx, query, appID).Scan(&app.ID, &app.Name, &app.Secret)
+	err := s.replicaPool.QueryRow(ctx, query, appID).Scan(&app.ID, &app.Name, &app.Secret)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
@@ -35,10 +35,9 @@ func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err err
 
 	query := "INSERT INTO apps(name, secret) VALUES($1, $2) RETURNING id"
 
-	err = s.pool.QueryRow(ctx, query, app.Name, app.Secret).Scan(&id)
+	err = s.masterPool.QueryRow(ctx, query, app.Name, app.Secret).Scan(&id)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
 			return 0, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
 		}
 
@@ -53,7 +52,7 @@ func (s *Storage) DeleteApp(ctx context.Context, appID int) error {
 
 	query := "DELETE FROM apps WHERE id = $1"
 
-	_, err := s.pool.Exec(ctx, query, appID)
+	_, err := s.masterPool.Exec(ctx, query, appID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)

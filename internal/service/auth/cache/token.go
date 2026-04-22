@@ -38,6 +38,8 @@ func (c *tokenCache) RefreshToken(
 			return nil, nextErr
 		}
 
+		go c.cache.SaveRefreshToken(ctx, storedToken)
+
 		return storedToken, nil
 	}
 
@@ -54,10 +56,12 @@ func (c *tokenCache) SaveRefreshToken(
 
 	nextErr := c.next.SaveRefreshToken(ctx, token)
 
-	cacheErr := c.cache.SaveRefreshToken(ctx, token)
-	if cacheErr != nil {
-		log.Error("failed to save token to cache", slog.Any("error", cacheErr))
-	}
+	go func() {
+		cacheErr := c.cache.SaveRefreshToken(ctx, token)
+		if cacheErr != nil {
+			log.Error("failed to save token to cache", slog.Any("error", cacheErr))
+		}
+	}()
 
 	return nextErr
 }

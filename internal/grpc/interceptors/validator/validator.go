@@ -24,10 +24,10 @@ func UnaryServerInterceptor(l *slog.Logger) grpc.UnaryServerInterceptor {
 
 	return func(
 		ctx context.Context,
-		req interface{},
+		req any,
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (any, error) {
 		msg, ok := req.(proto.Message)
 		if !ok {
 			return handler(ctx, req)

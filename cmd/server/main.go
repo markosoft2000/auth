@@ -31,24 +31,6 @@ func main() {
 
 	log := setupLogger(cfg.Env)
 
-	r := routes.NewRouter(log, cfg.HTTPServer.Timeout)
-
-	// HTTP Server Configuration
-	srv := &http.Server{
-		Addr:         cfg.HTTPServer.Address,
-		Handler:      r,
-		ReadTimeout:  time.Duration(cfg.HTTPServer.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.HTTPServer.WriteTimeout) * time.Second,
-		IdleTimeout:  time.Duration(cfg.HTTPServer.IdleTimeout) * time.Second,
-	}
-	go func() {
-		log.Info("http server starting", slog.String("addr", cfg.HTTPServer.Address))
-
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error("http server failed", slog.Any("error", err))
-		}
-	}()
-
 	// GRPC Server Configuration
 	hasher := argon2.New(
 		cfg.Hasher.Memory,
@@ -60,14 +42,24 @@ func main() {
 
 	cipher := gcmCipher.New(cfg.MasterSecret)
 
-	pgStorage, err := postgres.New(
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Database,
-		cfg.Postgres.SSLMode,
-	)
+	pgMasterCfg := &postgres.Config{
+		Host:     cfg.Postgres.Host,
+		Port:     cfg.Postgres.Port,
+		User:     cfg.Postgres.User,
+		Password: cfg.Postgres.Password,
+		Database: cfg.Postgres.Database,
+		SSLMode:  cfg.Postgres.SSLMode,
+	}
+	pgReplicaCfg := pgMasterCfg
+	// Create a cluster without single point of failure (SPOF).
+	// * HAProxy with dual listeners - listens on two different TCP ports:
+	// Port 5432 (Write): Routes exclusively to the current Master node.
+	// Port 5433 (Read): Load balances across all healthy Replica nodes.
+	// * PgBouncer configured in transaction mode.
+	// Schema:
+	// App -> Virtual IP (Keepalived) -> Active HAProxy (+Patroni API) ->
+	// -> Master's PgBouncer (Port 6432) -> PgBouncer Local PostgreSQL (Port 5432)
+	pgStorage, err := postgres.New(pgMasterCfg, pgReplicaCfg)
 	if err != nil {
 		log.Error("failed to init storage", slog.Any("error", err))
 		os.Exit(1)
@@ -79,6 +71,7 @@ func main() {
 	var redisStorage *redis.Storage
 
 	if cfg.Caching.Enabled {
+		// Redis cluster ready solution
 		redisStorage, err = redis.New(redis.Config{
 			Addresses:        cfg.Redis.Addresses,
 			OperationTimeout: cfg.Redis.OperationTimeout,
@@ -113,6 +106,23 @@ func main() {
 	)
 	go func() {
 		grpcApp.GRPCServer.MustRun()
+	}()
+
+	// HTTP Server Configuration
+	r := routes.NewRouter(log, cfg.HTTPServer.Timeout, pgStorage)
+	srv := &http.Server{
+		Addr:         cfg.HTTPServer.Address,
+		Handler:      r,
+		ReadTimeout:  time.Duration(cfg.HTTPServer.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.HTTPServer.WriteTimeout) * time.Second,
+		IdleTimeout:  time.Duration(cfg.HTTPServer.IdleTimeout) * time.Second,
+	}
+	go func() {
+		log.Info("http server starting", slog.String("addr", cfg.HTTPServer.Address))
+
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("http server failed", slog.Any("error", err))
+		}
 	}()
 
 	// Graceful Shutdown Setup

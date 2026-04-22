@@ -103,6 +103,7 @@ func main() {
 			AppManager:   appStorage,
 			TokenManager: tokenStorage,
 		},
+		pgStorage,
 	)
 	go func() {
 		grpcApp.GRPCServer.MustRun()

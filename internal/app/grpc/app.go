@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"time"
 
 	authgrpc "github.com/markosoft2000/auth/internal/grpc/auth"
 	"github.com/markosoft2000/auth/internal/grpc/interceptors/validator"
@@ -13,17 +14,27 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 )
 
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 type App struct {
-	log        *slog.Logger
-	gRPCServer *grpc.Server
-	port       int
+	log               *slog.Logger
+	gRPCServer        *grpc.Server
+	port              int
+	healthSrv         *health.Server
+	dbPinger          Pinger
+	healthCheckCancel context.CancelFunc // To cancel the HealthCheck goroutine
 }
 
 func New(
 	log *slog.Logger,
+	dbPinger Pinger,
 	port int,
 	authService authgrpc.Auth,
 ) *App {
@@ -47,12 +58,18 @@ func New(
 		validator.UnaryServerInterceptor(log),
 	))
 
+	healthSrv := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(gRPCServer, healthSrv)
+
 	authgrpc.Register(gRPCServer, authService)
 
 	return &App{
-		log:        log,
-		gRPCServer: gRPCServer,
-		port:       port,
+		log:               log,
+		gRPCServer:        gRPCServer,
+		port:              port,
+		healthSrv:         healthSrv,
+		dbPinger:          dbPinger,
+		healthCheckCancel: nil, // Will be set in Run
 	}
 }
 
@@ -78,6 +95,11 @@ func (a *App) Run() error {
 
 	a.log.Info("grpc server started", slog.String("addr", l.Addr().String()))
 
+	// Create a cancellable context for the HealthCheck goroutine
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	a.healthCheckCancel = healthCancel
+	go a.HealthCheck(healthCtx)
+
 	if err := a.gRPCServer.Serve(l); err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -90,4 +112,34 @@ func (a *App) Stop() {
 
 	a.log.With(slog.String("op", op)).Info("stopping grpc server", slog.Int("port", a.port))
 	a.gRPCServer.GracefulStop()
+
+	// Signal the HealthCheck goroutine to stop
+	if a.healthCheckCancel != nil {
+		a.healthCheckCancel()
+	}
+}
+
+func (a *App) HealthCheck(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Check Postgres status
+			status := grpc_health_v1.HealthCheckResponse_SERVING
+			if err := a.dbPinger.Ping(ctx); err != nil {
+				a.log.Error("health check failed: postgres unreachable", slog.Any("error", err))
+				status = grpc_health_v1.HealthCheckResponse_NOT_SERVING
+			}
+
+			// Update health server (use "" for overall and "auth.Auth" for service specific)
+			a.healthSrv.SetServingStatus("", status)
+			a.healthSrv.SetServingStatus("auth.Auth", status)
+
+		case <-ctx.Done():
+			a.log.Info("HealthCheck goroutine stopped due to context cancellation")
+			return
+		}
+	}
 }

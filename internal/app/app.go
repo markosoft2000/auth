@@ -18,9 +18,10 @@ func New(
 	hasher auth.Hasher,
 	cipher auth.Cipher,
 	storage auth.Storage,
+	dbPinger grpcapp.Pinger,
 ) *App {
 	authService := auth.New(log, cfg, hasher, cipher, storage)
-	grpcApp := grpcapp.New(log, grpcPort, authService)
+	grpcApp := grpcapp.New(log, dbPinger, grpcPort, authService)
 
 	return &App{
 		GRPCServer: grpcApp,

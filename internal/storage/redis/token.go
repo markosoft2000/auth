@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	tokenKey = "{app:%d}:refresh-token:%s"
-	appTag   = "{app:%d}:tag"
-	userTag  = "{user:%d}:tag"
+	tokenKey      = "{app:%d}:refresh-token:%s"
+	appTag        = "{app:%d}:tag"
+	appTagPattern = "{app:*}:tag"
+	userTag       = "{user:%d}:tag"
 
 	deleteAppTokenLimit                 = 10000
 	revokeAllUserTokensConcurrencyLimit = 10
@@ -178,12 +179,55 @@ func (s *Storage) RevokeToken(
 	return nil
 }
 
+func (s *Storage) getAllAppSets(ctx context.Context) ([]string, error) {
+	op := "storage.redis.getAllAppSets"
+
+	keys := make([]string, 0)
+	var cursor uint64
+
+	for {
+		resp := s.client.Do(ctx, s.client.B().
+			Scan().
+			Cursor(cursor).
+			Match(appTagPattern).
+			Type("set").
+			Build())
+
+		if err := resp.Error(); err != nil {
+			if rueidis.IsRedisNil(err) {
+				break
+			}
+
+			return nil, fmt.Errorf("%s: sscan failure: %w", op, err)
+		}
+
+		entry, err := resp.AsScanEntry()
+		if err != nil {
+			return nil, fmt.Errorf("%s: get entry failure: %w", op, err)
+		}
+
+		keys = append(keys, entry.Elements...)
+
+		cursor = entry.Cursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return keys, nil
+}
+
 func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 	op := "storage.redis.RevokeAllUserTokens"
 
 	userTagKey := getUserTagKey(userID)
 
 	var cursor uint64
+
+	appSets, err := s.getAllAppSets(ctx)
+	if err != nil {
+		return fmt.Errorf("%s fail to get all app sets: %w", op, err)
+	}
 
 	for {
 		chunkCtx, chunkCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
@@ -228,8 +272,11 @@ func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 					defer delCancel()
 
 					_ = s.client.Do(delCtx, s.client.B().Del().Key(k).Build())
-					//@TODO: delete user tokens from app-set - the problem app-sets are unknown (there might be several apps user logged in)
-					// _ = s.client.Do(delCtx, s.client.B().Srem().Key(appTagKey...).Member(k).Build())
+
+					// delete user tokens from app-sets (cleanup) - there might be several apps user logged in
+					for _, app := range appSets {
+						_ = s.client.Do(delCtx, s.client.B().Srem().Key(app).Member(k).Build())
+					}
 				}(key)
 			}
 			wg.Wait()

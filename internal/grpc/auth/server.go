@@ -31,6 +31,13 @@ type Auth interface {
 		err error,
 	)
 
+	Logout(
+		ctx context.Context,
+		userID int64,
+		appID int64,
+		allApp bool,
+	) error
+
 	IsAdmin(
 		ctx context.Context,
 		userID int64,
@@ -110,6 +117,20 @@ func (s *serverAPI) Login(ctx context.Context, req *authv1.LoginRequest) (*authv
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+func (s *serverAPI) Logout(ctx context.Context, req *authv1.LogoutRequest) (*authv1.LogoutResponse, error) {
+	err := s.auth.Logout(
+		ctx,
+		req.GetUserId(),
+		int64(req.GetAppId()),
+		req.AllApp,
+	)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to logout")
+	}
+
+	return &authv1.LogoutResponse{}, nil
 }
 
 func (s *serverAPI) IsAdmin(ctx context.Context, req *authv1.IsAdminRequest) (*authv1.IsAdminResponse, error) {

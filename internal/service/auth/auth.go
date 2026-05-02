@@ -57,13 +57,13 @@ type TokenManager interface {
 	RefreshToken(
 		ctx context.Context,
 		token string,
+		userID int64,
 		appID int,
 	) (*models.RefreshToken, error)
 
 	SaveRefreshToken(ctx context.Context, token *models.RefreshToken) error
 
-	RevokeToken(ctx context.Context, token string, appID int) error
-
+	RevokeToken(ctx context.Context, token string, userID int64, appID int) error
 	RevokeAllUserTokens(ctx context.Context, userID int64) error
 	RevokeAllAppTokens(ctx context.Context, appID int) error
 }
@@ -228,6 +228,20 @@ func (a *Auth) Login(
 		return "", "", fmt.Errorf("invalid IP format - %s: %w", op, err)
 	}
 
+	// revoke old token
+	oldRefreshToken, err := a.tokenManager.RefreshToken(ctx, "", user.ID, int(appID))
+	if err != nil && !errors.Is(err, storage.ErrRefreshTokenNotFound) {
+		log.Error("failed to get refresh token", slog.Any("error", err))
+	} else if oldRefreshToken != nil {
+		err = a.tokenManager.RevokeToken(ctx, oldRefreshToken.Token, user.ID, int(appID))
+		if err != nil {
+			log.Error("failed to revoke refresh token", slog.Any("error", err))
+
+			return "", "", fmt.Errorf("%s: %w", op, err)
+		}
+	}
+
+	// save new token
 	err = a.tokenManager.SaveRefreshToken(
 		ctx,
 		&models.RefreshToken{
@@ -247,7 +261,63 @@ func (a *Auth) Login(
 
 	log.Info("user logged in successfully")
 
+	//@TODO: send login event to kafka for user->app
+
 	return accessToken, refreshToken, nil
+}
+
+func (a *Auth) Logout(
+	ctx context.Context,
+	userID int64,
+	appID int64,
+	allApp bool,
+) error {
+	const op = "auth.Logout"
+	log := a.log.With(slog.String("op", op), slog.Int64("user_id", userID), slog.Int64("app_id", appID))
+
+	log.Info("attempting logout")
+
+	if allApp {
+		err := a.tokenManager.RevokeAllUserTokens(ctx, userID)
+		if err != nil {
+			log.Error("failed to revoke all refresh tokens", slog.Any("error", err))
+
+			return fmt.Errorf("%s: %w", op, err)
+		}
+
+		//@TODO: add to kafka 'user logout all apps' event
+
+		return nil
+	}
+
+	refreshToken, err := a.tokenManager.RefreshToken(ctx, "", userID, int(appID))
+	if err != nil {
+		if errors.Is(err, storage.ErrRefreshTokenNotFound) {
+			log.Error("refresh token not found", slog.Any("error", err))
+
+			return fmt.Errorf("%s: %w", op, ErrRefreshTokenNotFound)
+		}
+
+		log.Error("failed to get refresh token", slog.Any("error", err))
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if refreshToken.Revoked {
+		return nil
+	}
+
+	// revoking the token
+	err = a.tokenManager.RevokeToken(ctx, refreshToken.Token, userID, int(appID))
+	if err != nil {
+		log.Error("failed to revoke refresh token", slog.Any("error", err))
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	//@TODO: add to kafka 'user logout app' event
+
+	return nil
 }
 
 func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
@@ -323,7 +393,7 @@ func (a *Auth) RefreshToken(
 
 		Only 'revoke token' operation should delete the related cached token
 	*/
-	storedRefreshToken, err := a.tokenManager.RefreshToken(ctx, refreshToken, app.ID)
+	storedRefreshToken, err := a.tokenManager.RefreshToken(ctx, refreshToken, user.ID, app.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrRefreshTokenNotFound) {
 			log.Error("refresh token not found", slog.Any("error", err))
@@ -411,7 +481,7 @@ func (a *Auth) RefreshToken(
 			return "", "", fmt.Errorf("%s: %w", op, err)
 		}
 
-		err = a.tokenManager.RevokeToken(ctx, refreshToken, app.ID)
+		err = a.tokenManager.RevokeToken(ctx, refreshToken, user.ID, app.ID)
 		if err != nil {
 			log.Error("failed to revoke refresh token", slog.Any("error", err))
 

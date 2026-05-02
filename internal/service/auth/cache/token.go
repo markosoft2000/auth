@@ -29,11 +29,16 @@ func NewTokenCache(log *slog.Logger, cache auth.TokenManager, next auth.TokenMan
 func (c *tokenCache) RefreshToken(
 	ctx context.Context,
 	token string,
+	userID int64,
 	appID int,
 ) (*models.RefreshToken, error) {
-	storedToken, cacheErr := c.cache.RefreshToken(ctx, token, appID)
-	if cacheErr != nil {
-		storedToken, nextErr := c.next.RefreshToken(ctx, token, appID)
+	if token == "" {
+		return c.next.RefreshToken(ctx, token, userID, appID)
+	}
+
+	storedToken, cacheErr := c.cache.RefreshToken(ctx, token, userID, appID)
+	if cacheErr != nil || storedToken == nil || storedToken.Token == "" {
+		storedToken, nextErr := c.next.RefreshToken(ctx, token, userID, appID)
 		if nextErr != nil {
 			return nil, nextErr
 		}
@@ -66,14 +71,19 @@ func (c *tokenCache) SaveRefreshToken(
 	return nextErr
 }
 
-func (c *tokenCache) RevokeToken(ctx context.Context, token string, appID int) error {
+func (c *tokenCache) RevokeToken(
+	ctx context.Context,
+	token string,
+	userID int64,
+	appID int,
+) error {
 	const op = "cache.TokenCache.RevokeToken"
 
 	log := c.log.With(slog.String("op", op))
 
-	nextErr := c.next.RevokeToken(ctx, token, appID)
+	nextErr := c.next.RevokeToken(ctx, token, userID, appID)
 
-	cacheErr := c.cache.RevokeToken(ctx, token, appID)
+	cacheErr := c.cache.RevokeToken(ctx, token, userID, appID)
 	if cacheErr != nil {
 		if !errors.Is(cacheErr, storage.ErrRefreshTokenNotFound) {
 			log.Error("failed to delete token from cache", slog.Any("error", cacheErr))
@@ -84,7 +94,18 @@ func (c *tokenCache) RevokeToken(ctx context.Context, token string, appID int) e
 }
 
 func (c *tokenCache) RevokeAllUserTokens(ctx context.Context, userID int64) error {
-	return c.next.RevokeAllUserTokens(ctx, userID)
+	const op = "cache.TokenCache.RevokeAllUserTokens"
+
+	log := c.log.With(slog.String("op", op))
+
+	nextErr := c.next.RevokeAllUserTokens(ctx, userID)
+
+	cacheErr := c.cache.RevokeAllUserTokens(ctx, userID)
+	if cacheErr != nil {
+		log.Error("failed to revoke all tokens for user in cache", slog.Any("error", cacheErr))
+	}
+
+	return nextErr
 }
 
 func (c *tokenCache) RevokeAllAppTokens(ctx context.Context, appID int) error {

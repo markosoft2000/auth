@@ -37,6 +37,7 @@ func (s *Storage) SaveRefreshToken(
 func (s *Storage) RefreshToken(
 	ctx context.Context,
 	token string,
+	userID int64,
 	appID int,
 ) (*models.RefreshToken, error) {
 	const op = "storage.postgres.RefreshToken"
@@ -45,11 +46,20 @@ func (s *Storage) RefreshToken(
 		Token: token,
 	}
 
-	query := "SELECT user_id, app_id, expires_at, created_at, revoked, ip_address FROM refresh_tokens WHERE token = $1"
+	query := "SELECT user_id, app_id, token, expires_at, created_at, revoked, ip_address FROM refresh_tokens WHERE user_id = $1 AND app_id = $2"
+	args := []any{userID, appID}
 
-	err := s.replicaPool.QueryRow(ctx, query, token).Scan(
+	if token != "" {
+		query += " AND token = $3"
+		args = append(args, token)
+	}
+
+	query += " ORDER BY created_at DESC LIMIT 1"
+
+	err := s.replicaPool.QueryRow(ctx, query, args...).Scan(
 		&tokenModel.UserID,
 		&tokenModel.AppID,
+		&tokenModel.Token,
 		&tokenModel.ExpiresAt,
 		&tokenModel.CreatedAt,
 		&tokenModel.Revoked,
@@ -66,12 +76,23 @@ func (s *Storage) RefreshToken(
 	return tokenModel, nil
 }
 
-func (s *Storage) RevokeToken(ctx context.Context, token string, appID int) error {
+func (s *Storage) RevokeToken(
+	ctx context.Context,
+	token string,
+	userID int64,
+	appID int,
+) error {
 	const op = "storage.postgres.RevokeToken"
 
-	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE token = $1"
+	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 AND app_id = $2"
+	args := []any{userID, appID}
 
-	_, err := s.masterPool.Exec(ctx, query, token)
+	if token != "" {
+		query += " AND token = $3"
+		args = append(args, token)
+	}
+
+	_, err := s.masterPool.Exec(ctx, query, args...)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)

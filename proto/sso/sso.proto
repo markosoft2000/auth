@@ -9,6 +9,7 @@ option go_package = "markosoft2000.auth.v1;authv1";
 service Auth {
   rpc Register (RegisterRequest) returns (RegisterResponse);
   rpc Login (LoginRequest) returns (LoginResponse);
+  rpc Logout (LogoutRequest) returns (LogoutResponse);
   rpc IsAdmin (IsAdminRequest) returns (IsAdminResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
   rpc AddApp (AddAppRequest) returns (AddAppResponse);
@@ -51,6 +52,16 @@ message LoginRequest {
 message LoginResponse {
   string access_token = 1; 
   string refresh_token = 2; 
+}
+
+message LogoutRequest {
+  int64 user_id = 1 [(buf.validate.field).int64.gt = 0];
+  int32 app_id = 2 [(buf.validate.field).int32.gt = 0];
+  bool all_app = 3;
+}
+
+message LogoutResponse {
+
 }
 
 message IsAdminRequest {

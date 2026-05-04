@@ -46,8 +46,8 @@ gen-proto:
 	@rm -rf proto/sso/buf/*
 
 	@buf dep update && buf generate proto
-	@buf export . --output proto/vendor
-	@cp -r proto/vendor/buf/ proto/sso/
+# 	@buf export . --output proto/vendor
+# 	@cp -r proto/vendor/buf/ proto/sso/
 
 
 # DOCKER

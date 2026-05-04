@@ -35,3 +35,17 @@ caching:
   enabled: false
   app_ttl: 1m
   refresh_token_ttl: 24h
+kafka:
+  bootstrap_servers: "kafka-1:29092,kafka-2:29092,kafka-3:29092"
+  client_id: "auth-producer:"
+  topic: "auth-user-activity"
+  batch_num_messages: 1000
+  linger_ms: 50
+  compression_type: "lz4"
+  acks: "all"
+  enable_idempotence: true
+  retries: 2000
+  retry_backoff_ms: 500
+  message_timeout_ms: 900000
+  socket_keepalive_enable: true
+  queue_buffering_max_msgs: 100000

@@ -37,7 +37,9 @@ func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err err
 
 	err = s.masterPool.QueryRow(ctx, query, app.Name, app.Secret).Scan(&id)
 	if err != nil {
-		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
+		var pgErr *pgconn.PgError
+		// if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return 0, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
 		}
 

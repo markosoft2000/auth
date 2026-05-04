@@ -98,3 +98,30 @@ func GetIP(r *http.Request) string {
 
     return ip
 }
+```
+
+### Kafka topic creation:
+
+```sh
+kafka-configs --bootstrap-server localhost:9092 \
+  --entity-type topics --entity-name auth-user-activity.v1 \
+  --add-config min.insync.replicas=1,retention.ms=1200000,segment.ms=1200000
+```
+
+list of topics:
+
+``` sh
+sudo docker compose exec kafka-1 kafka-topics --bootstrap-server kafka-1:29092 --list
+```
+
+describe topic:
+
+``` sh
+sudo docker compose exec kafka-1 kafka-topics --bootstrap-server kafka-1:29092 --describe --topic auth-user-activity
+```
+
+consume topic:
+
+``` sh
+sudo docker compose exec kafka-1 kafka-console-consumer --bootstrap-server kafka-1:29092 --topic auth-user-activity --from-beginning
+```

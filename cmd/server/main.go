@@ -13,6 +13,7 @@ import (
 	"github.com/markosoft2000/auth/internal/config"
 	gcmCipher "github.com/markosoft2000/auth/internal/lib/crypt"
 	"github.com/markosoft2000/auth/internal/lib/hasher/argon2"
+	"github.com/markosoft2000/auth/internal/pubsub/kafka"
 	"github.com/markosoft2000/auth/internal/routes"
 	"github.com/markosoft2000/auth/internal/service/auth"
 	"github.com/markosoft2000/auth/internal/service/auth/cache"
@@ -27,6 +28,9 @@ const (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cfg := config.MustLoad()
 
 	log := setupLogger(cfg.Env)
@@ -87,6 +91,26 @@ func main() {
 		tokenStorage = cache.NewTokenCache(log, redisStorage, tokenStorage)
 	}
 
+	pubsub, err := kafka.New(ctx, log, kafka.Config{
+		BootstrapServers:      cfg.Kafka.BootstrapServers,
+		ClientID:              cfg.Kafka.ClientID,
+		Topic:                 cfg.Kafka.Topic,
+		BatchNumMessages:      cfg.Kafka.BatchNumMessages,
+		LingerMs:              cfg.Kafka.LingerMs,
+		CompressionType:       cfg.Kafka.CompressionType,
+		Acks:                  cfg.Kafka.Acks,
+		EnableIdempotence:     cfg.Kafka.EnableIdempotence,
+		Retries:               cfg.Kafka.Retries,
+		RetryBackoffMs:        cfg.Kafka.RetryBackoffMs,
+		MessageTimeoutMs:      cfg.Kafka.MessageTimeoutMs,
+		SocketKeepaliveEnable: cfg.Kafka.SocketKeepaliveEnable,
+		QueueBufferingMaxMsgs: cfg.Kafka.QueueBufferingMaxMsgs,
+	})
+	if err != nil {
+		log.Error("failed to init kafka", slog.Any("error", err))
+		os.Exit(1)
+	}
+
 	grpcApp := grpcapp.New(
 		log,
 		cfg.GRPC.Port,
@@ -104,6 +128,8 @@ func main() {
 			TokenManager: tokenStorage,
 		},
 		pgStorage,
+		pubsub,
+		pubsub,
 	)
 	go func() {
 		grpcApp.GRPCServer.MustRun()
@@ -127,28 +153,27 @@ func main() {
 	}()
 
 	// Graceful Shutdown Setup
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// Wait for SIGINT or SIGTERM
-	<-ctx.Done()
+	<-sigCtx.Done()
 
 	log.Info("shutting down gracefully...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("forced shutdown http server", "error", err)
 	}
 
 	grpcApp.GRPCServer.Stop()
-
-	pgStorage.Stop()
-
+	pubsub.Stop()
 	if cfg.Caching.Enabled {
 		redisStorage.Stop()
 	}
+	pgStorage.Stop()
 
 	log.Info("server stopped")
 }

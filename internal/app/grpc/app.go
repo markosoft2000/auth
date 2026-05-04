@@ -8,7 +8,7 @@ import (
 	"time"
 
 	authgrpc "github.com/markosoft2000/auth/internal/grpc/auth"
-	"github.com/markosoft2000/auth/internal/grpc/interceptors/validator"
+	// "github.com/markosoft2000/auth/internal/grpc/interceptors/validator"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
@@ -29,14 +29,16 @@ type App struct {
 	port              int
 	healthSrv         *health.Server
 	dbPinger          Pinger
+	pubsubPinger      Pinger
 	healthCheckCancel context.CancelFunc // To cancel the HealthCheck goroutine
 }
 
 func New(
 	log *slog.Logger,
-	dbPinger Pinger,
 	port int,
 	authService authgrpc.Auth,
+	dbPinger Pinger,
+	pubsubPinger Pinger,
 ) *App {
 	loggingOpts := []logging.Option{
 		logging.WithLogOnEvents(
@@ -55,7 +57,7 @@ func New(
 	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		recovery.UnaryServerInterceptor(recoveryOpts...),
 		logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
-		validator.UnaryServerInterceptor(log),
+		// validator.UnaryServerInterceptor(log),
 	))
 
 	healthSrv := health.NewServer()
@@ -69,6 +71,7 @@ func New(
 		port:              port,
 		healthSrv:         healthSrv,
 		dbPinger:          dbPinger,
+		pubsubPinger:      pubsubPinger,
 		healthCheckCancel: nil, // Will be set in Run
 	}
 }
@@ -127,13 +130,24 @@ func (a *App) HealthCheck(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			// Check Postgres status
-			status := grpc_health_v1.HealthCheckResponse_SERVING
+			dbStatus := grpc_health_v1.HealthCheckResponse_SERVING
 			if err := a.dbPinger.Ping(ctx); err != nil {
-				a.log.Error("health check failed: postgres unreachable", slog.Any("error", err))
-				status = grpc_health_v1.HealthCheckResponse_NOT_SERVING
+				a.log.Error("health check failed", slog.String("service", "postgres"), slog.Any("error", err))
+				dbStatus = grpc_health_v1.HealthCheckResponse_NOT_SERVING
 			}
 
-			// Update health server (use "" for overall and "auth.Auth" for service specific)
+			// Check pubsub status
+			pubsubStatus := grpc_health_v1.HealthCheckResponse_SERVING
+			if err := a.pubsubPinger.Ping(ctx); err != nil {
+				a.log.Error("health check failed", slog.String("service", "pubsub"), slog.Any("error", err))
+				pubsubStatus = grpc_health_v1.HealthCheckResponse_NOT_SERVING
+			}
+
+			// Update health server
+			status := dbStatus
+			if pubsubStatus == grpc_health_v1.HealthCheckResponse_NOT_SERVING {
+				status = pubsubStatus
+			}
 			a.healthSrv.SetServingStatus("", status)
 			a.healthSrv.SetServingStatus("auth.Auth", status)
 

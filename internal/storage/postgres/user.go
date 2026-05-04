@@ -56,8 +56,10 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash string) (
 
 	err = s.masterPool.QueryRow(ctx, query, email, passHash).Scan(&id)
 	if err != nil {
-		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
-			return 0, fmt.Errorf("%s: %w", op, storage.ErrUserExists)
+		var pgErr *pgconn.PgError
+		// if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return 0, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
 		}
 
 		return 0, fmt.Errorf("%s: %w", op, err)

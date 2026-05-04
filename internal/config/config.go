@@ -21,6 +21,7 @@ type Config struct {
 	MasterSecret           string           `yaml:"master_secret"`
 	Redis                  RedisConfig      `yaml:"redis"`
 	Caching                CachingConfig    `yaml:"caching"`
+	Kafka                  KafkaConfig      `yaml:"kafka"`
 }
 
 type HTTPServerConfig struct {
@@ -62,6 +63,22 @@ type CachingConfig struct {
 	Enabled         bool          `yaml:"enabled" env-default:"false"`
 	AppTTL          time.Duration `yaml:"app_ttl" env-default:"1m"`
 	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl" env-default:"24h"`
+}
+
+type KafkaConfig struct {
+	BootstrapServers      string `yaml:"bootstrap_servers" env:"localhost:9092" env-required:"true"`
+	ClientID              string `yaml:"client_id" env:"auth-producer:" env-required:"true"`
+	Topic                 string `yaml:"topic" env:"auth-user-activity-v1" env-required:"true"`
+	BatchNumMessages      int    `yaml:"batch_num_messages" env-default:"1000"`
+	LingerMs              int    `yaml:"linger_ms" env-default:"50"`
+	CompressionType       string `yaml:"compression_type" env-default:"lz4"`
+	Acks                  string `yaml:"acks" env-default:"all"`
+	EnableIdempotence     bool   `yaml:"enable_idempotence" env-default:"true"`
+	Retries               int    `yaml:"retries" env-default:"2000"`         // a bit more than 15 minutes * 60 secs * 500 ms (retry.backoff.ms)
+	RetryBackoffMs        int    `yaml:"retry_backoff_ms" env-default:"500"` // Wait 500ms between retries
+	MessageTimeoutMs      int    `yaml:"message_timeout_ms" env-default:"900000"`
+	SocketKeepaliveEnable bool   `yaml:"socket_keepalive_enable" env-default:"true"`
+	QueueBufferingMaxMsgs int    `yaml:"queue_buffering_max_msgs" env-default:"100000"`
 }
 
 var once sync.Once

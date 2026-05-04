@@ -18,7 +18,11 @@ type tokenCache struct {
 	next  auth.TokenManager
 }
 
-func NewTokenCache(log *slog.Logger, cache auth.TokenManager, next auth.TokenManager) auth.TokenManager {
+func NewTokenCache(
+	log *slog.Logger,
+	cache auth.TokenManager,
+	next auth.TokenManager,
+) auth.TokenManager {
 	return &tokenCache{
 		log:   log,
 		cache: cache,

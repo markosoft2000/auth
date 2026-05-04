@@ -3,14 +3,10 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"net/netip"
 	"time"
 
 	"github.com/markosoft2000/auth/internal/domain/models"
-	"github.com/markosoft2000/auth/internal/lib/jwt"
-	"github.com/markosoft2000/auth/internal/storage"
 )
 
 type Hasher interface {
@@ -21,6 +17,10 @@ type Hasher interface {
 type Cipher interface {
 	Encrypt(plaintext []byte) ([]byte, error)
 	Decrypt(encrypted []byte) ([]byte, error)
+}
+
+type PubSub interface {
+	Produce(key, data []byte) error
 }
 
 type Storage struct {
@@ -96,6 +96,7 @@ type Auth struct {
 	userProvider           UserProvider
 	appManager             AppManager
 	tokenManager           TokenManager
+	pubsub                 PubSub
 }
 
 func New(
@@ -104,6 +105,7 @@ func New(
 	hasher Hasher,
 	cipher Cipher,
 	storage Storage,
+	pubsub PubSub,
 ) *Auth {
 	return &Auth{
 		log:                    log,
@@ -116,380 +118,6 @@ func New(
 		userProvider:           storage.UserProvider,
 		appManager:             storage.AppManager,
 		tokenManager:           storage.TokenManager,
+		pubsub:                 pubsub,
 	}
-}
-
-// RegisterNewUser registers a new user
-func (a *Auth) RegisterNewUser(
-	ctx context.Context,
-	email string,
-	pass string,
-) (int64, error) {
-	const op = "auth.RegisterNewUser"
-	log := a.log.With(slog.String("op", op), slog.String("email", email))
-
-	log.Info("registering new user")
-
-	passHash, err := a.hasher.HashPassword(pass)
-	if err != nil {
-		log.Error("failed to hash password", slog.Any("error", err.Error()))
-
-		return 0, fmt.Errorf("%s: %w", op, err)
-	}
-
-	id, err := a.userSaver.SaveUser(ctx, email, passHash)
-	if err != nil {
-		if errors.Is(err, storage.ErrUserExists) {
-			log.Error("user exists", slog.Any("error", err))
-
-			return 0, fmt.Errorf("%s: %w", op, ErrUserExists)
-		}
-
-		log.Error("failed to save user", slog.Any("error", err))
-
-		return 0, fmt.Errorf("%s: %w", op, err)
-	}
-
-	return id, nil
-}
-
-// Login provides a new access and refresh tokens
-func (a *Auth) Login(
-	ctx context.Context,
-	email string,
-	password string,
-	appID int,
-	ip string,
-) (
-	accessToken string,
-	refreshToken string,
-	err error,
-) {
-	const op = "auth.Login"
-	log := a.log.With(slog.String("op", op), slog.String("email", email))
-
-	log.Info("attempting login")
-
-	app, err := a.appManager.App(ctx, appID)
-	if err != nil {
-		if errors.Is(err, storage.ErrAppNotFound) {
-			log.Error("app not found", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, ErrAppNotFound)
-		}
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	user, err := a.userProvider.User(ctx, email)
-	if err != nil {
-		if errors.Is(err, storage.ErrUserNotFound) {
-			log.Error("user not found", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
-		}
-
-		log.Error("failed to get user", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	if !a.hasher.ComparePassword(user.PassHash, password) {
-		log.Warn("invalid credentials", slog.String("email", email))
-
-		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
-	}
-
-	// TODO: revoke old refresh tokens for the user for the app - logout for the user->app
-
-	decryptedAppSecret, err := a.cipher.Decrypt(app.Secret)
-	if err != nil {
-		log.Warn("invalid app key", slog.Int("app_id", app.ID))
-
-		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidAppKey)
-	}
-
-	accessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, decryptedAppSecret)
-	if err != nil {
-		log.Error("failed to generate accessToken", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	refreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, decryptedAppSecret)
-	if err != nil {
-		log.Error("failed to generate refreshToken", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	netIP, err := netip.ParseAddr(ip)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid IP format - %s: %w", op, err)
-	}
-
-	// revoke old token
-	oldRefreshToken, err := a.tokenManager.RefreshToken(ctx, "", user.ID, int(appID))
-	if err != nil && !errors.Is(err, storage.ErrRefreshTokenNotFound) {
-		log.Error("failed to get refresh token", slog.Any("error", err))
-	} else if oldRefreshToken != nil {
-		err = a.tokenManager.RevokeToken(ctx, oldRefreshToken.Token, user.ID, int(appID))
-		if err != nil {
-			log.Error("failed to revoke refresh token", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, err)
-		}
-	}
-
-	// save new token
-	err = a.tokenManager.SaveRefreshToken(
-		ctx,
-		&models.RefreshToken{
-			UserID:     user.ID,
-			AppID:      app.ID,
-			Token:      refreshToken,
-			IP_address: netIP,
-			CreatedAt:  time.Now(),
-			ExpiresAt:  time.Now().Add(a.refreshTokenTTL),
-		},
-	)
-	if err != nil {
-		log.Error("failed to save refresh token", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	log.Info("user logged in successfully")
-
-	//@TODO: send login event to kafka for user->app
-
-	return accessToken, refreshToken, nil
-}
-
-func (a *Auth) Logout(
-	ctx context.Context,
-	userID int64,
-	appID int64,
-	allApp bool,
-) error {
-	const op = "auth.Logout"
-	log := a.log.With(slog.String("op", op), slog.Int64("user_id", userID), slog.Int64("app_id", appID))
-
-	log.Info("attempting logout")
-
-	if allApp {
-		err := a.tokenManager.RevokeAllUserTokens(ctx, userID)
-		if err != nil {
-			log.Error("failed to revoke all refresh tokens", slog.Any("error", err))
-
-			return fmt.Errorf("%s: %w", op, err)
-		}
-
-		//@TODO: add to kafka 'user logout all apps' event
-
-		return nil
-	}
-
-	refreshToken, err := a.tokenManager.RefreshToken(ctx, "", userID, int(appID))
-	if err != nil {
-		if errors.Is(err, storage.ErrRefreshTokenNotFound) {
-			log.Error("refresh token not found", slog.Any("error", err))
-
-			return fmt.Errorf("%s: %w", op, ErrRefreshTokenNotFound)
-		}
-
-		log.Error("failed to get refresh token", slog.Any("error", err))
-
-		return fmt.Errorf("%s: %w", op, err)
-	}
-
-	if refreshToken.Revoked {
-		return nil
-	}
-
-	// revoking the token
-	err = a.tokenManager.RevokeToken(ctx, refreshToken.Token, userID, int(appID))
-	if err != nil {
-		log.Error("failed to revoke refresh token", slog.Any("error", err))
-
-		return fmt.Errorf("%s: %w", op, err)
-	}
-
-	//@TODO: add to kafka 'user logout app' event
-
-	return nil
-}
-
-func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
-	const op = "auth.IsAdmin"
-
-	log := a.log.With(slog.String("op", op), slog.Int64("user_id", userID))
-
-	log.Info("role check - is admin")
-
-	isAdmin, err := a.userProvider.IsAdmin(ctx, userID)
-	if err != nil {
-		if errors.Is(err, storage.ErrAppNotFound) {
-			log.Error("failed to check admin status", slog.Any("error", err))
-
-			return false, fmt.Errorf("%s: %w", op, ErrUserNotFound)
-		}
-
-		return false, fmt.Errorf("%s: %w", op, err)
-	}
-
-	return isAdmin, nil
-}
-
-// RefreshToken provides a new access token and refresh token with rotation
-func (a *Auth) RefreshToken(
-	ctx context.Context,
-	refreshToken string,
-	ip string,
-) (
-	newAccessToken string,
-	newRefreshToken string,
-	err error,
-) {
-	const op = "auth.RefreshToken"
-
-	log := a.log.With(slog.String("op", op))
-	log.Info("refreshing access token")
-
-	claims, err := jwt.GetClaimsUnverified(refreshToken)
-	if err != nil {
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	user := &models.User{
-		ID:    claims.UserID,
-		Email: claims.Email,
-	}
-
-	app, err := a.appManager.App(ctx, claims.AppID)
-	if err != nil {
-		if errors.Is(err, storage.ErrAppNotFound) {
-			log.Error("app not found", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, ErrAppNotFound)
-		}
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	log = a.log.With(
-		slog.String("op", op),
-		slog.Int64("user_id", user.ID),
-		slog.Int("app_id", app.ID),
-	)
-
-	/*
-		if caching is used for refresh tokens and an app has been deleted
-		no need to invalidate token cache intentionally because
-		we can't retrieve a refresh token without the app (call above in this method)
-		meanwhile there are access tokens still remain active for some period of time,
-		user permissions will be checked during actions which include "is app active"
-		(it's expected and planed that some functional has been working for a bit longer)
-
-		Only 'revoke token' operation should delete the related cached token
-	*/
-	storedRefreshToken, err := a.tokenManager.RefreshToken(ctx, refreshToken, user.ID, app.ID)
-	if err != nil {
-		if errors.Is(err, storage.ErrRefreshTokenNotFound) {
-			log.Error("refresh token not found", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, ErrRefreshTokenNotFound)
-		}
-
-		log.Error("failed to get refresh token", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	// security section
-	// if the token revoked
-	if storedRefreshToken.Revoked {
-		log.Warn("revoked token was used. revoking all user tokens for all app due to a possible attack")
-
-		err := a.tokenManager.RevokeAllUserTokens(ctx, user.ID)
-		if err != nil {
-			log.Error("failed to revoke refresh token", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, err)
-		}
-
-		return "", "", fmt.Errorf("%s: %w", op, ErrRefreshTokenNotFound)
-	}
-
-	// - if ip and stored ip are diff - > revoke ALL refresh tokens for the user
-	netIP, err := netip.ParseAddr(ip)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid IP format - %s: %w", op, err)
-	}
-
-	if storedRefreshToken.IP_address != netIP {
-		log.Warn("invalid IP address for the session. token revoked.", slog.String("ip", ip))
-
-		err := a.tokenManager.RevokeAllUserTokens(ctx, user.ID)
-		if err != nil {
-			log.Error("failed to revoke refresh token", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, err)
-		}
-
-		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidIpAddress)
-	}
-
-	// OK
-	decryptedAppSecret, err := a.cipher.Decrypt(app.Secret)
-	if err != nil {
-		log.Warn("invalid app key", slog.Int("app_id", app.ID))
-
-		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidAppKey)
-	}
-
-	newAccessToken, err = jwt.GenerateToken(user, app.ID, a.tokenTTL, decryptedAppSecret)
-	if err != nil {
-		log.Error("failed to generate accessToken", slog.Any("error", err))
-
-		return "", "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	// refresh token rotation
-	if time.Since(storedRefreshToken.CreatedAt) > a.reissueRefreshTokenTTL {
-		newRefreshToken, err = jwt.GenerateToken(user, app.ID, a.refreshTokenTTL, decryptedAppSecret)
-		if err != nil {
-			log.Error("failed to generate refreshToken", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, err)
-		}
-
-		err = a.tokenManager.SaveRefreshToken(
-			ctx,
-			&models.RefreshToken{
-				UserID:     user.ID,
-				AppID:      app.ID,
-				Token:      newRefreshToken,
-				IP_address: storedRefreshToken.IP_address,
-				CreatedAt:  storedRefreshToken.CreatedAt,
-				ExpiresAt:  time.Now().Add(a.refreshTokenTTL),
-			},
-		)
-		if err != nil {
-			log.Error("failed to save refresh token", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, err)
-		}
-
-		err = a.tokenManager.RevokeToken(ctx, refreshToken, user.ID, app.ID)
-		if err != nil {
-			log.Error("failed to revoke refresh token", slog.Any("error", err))
-
-			return "", "", fmt.Errorf("%s: %w", op, err)
-		}
-
-		return newAccessToken, newRefreshToken, nil
-	}
-
-	return newAccessToken, "", nil
 }

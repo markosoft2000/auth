@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
@@ -23,6 +24,9 @@ type Config struct {
 	MessageTimeoutMs      int
 	SocketKeepaliveEnable bool
 	QueueBufferingMaxMsgs int
+
+	ProducerMaxRetries   int
+	ProducerRetryBackoff time.Duration
 }
 
 type PubSub struct {
@@ -38,9 +42,17 @@ func New(
 ) (*PubSub, error) {
 	const op = "pubsub.kafka.New"
 
+	if cfg.ProducerMaxRetries < 1 {
+		cfg.ProducerMaxRetries = 1
+	}
+
+	if cfg.ProducerRetryBackoff < 0 {
+		cfg.ProducerRetryBackoff = 0
+	}
+
 	host, err := os.Hostname()
 	if err != nil {
-		host = "unknown"
+		host = "unknown_hostname"
 	}
 
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
@@ -73,37 +85,7 @@ func New(
 		return nil, fmt.Errorf("%s: could not ping kafka: %w", op, err)
 	}
 
-	// Delivery report handler for produced messages
-	go func() {
-		log := log.With(slog.String("op", op))
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case e, ok := <-p.Events():
-				if !ok {
-					return
-				}
-				switch ev := e.(type) {
-				case *kafka.Message:
-					if ev.TopicPartition.Error != nil {
-						log.Error(
-							"Kafka: Delivery failed",
-							slog.String("topic", *ev.TopicPartition.Topic),
-							slog.Any("error", ev.TopicPartition.Error),
-						)
-					} else {
-						log.Debug(
-							"Kafka: Delivered message",
-							slog.String("topic", *ev.TopicPartition.Topic),
-							slog.Int("partition", int(ev.TopicPartition.Partition)),
-						)
-					}
-				}
-			}
-		}
-	}()
+	go eventListener(ctx, log.With(slog.String("op", op)), p)
 
 	return &PubSub{
 		producer: p,
@@ -112,29 +94,34 @@ func New(
 	}, nil
 }
 
-func (ps *PubSub) Stop() {
-	// Wait up to 15 seconds for outstanding messages to be delivered
-	ps.producer.Flush(15 * 1000)
-	ps.producer.Close()
-}
-
-func (ps *PubSub) Produce(key, data []byte) error {
-	err := ps.producer.Produce(
-		&kafka.Message{
-			TopicPartition: kafka.TopicPartition{
-				Topic:     &ps.cfg.Topic,
-				Partition: kafka.PartitionAny,
-			},
-			Key:   key,
-			Value: data,
-		},
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to enqueue kafka message: %w", err)
+// eventListener provides delivery report handler for produced messages
+func eventListener(ctx context.Context, log *slog.Logger, p *kafka.Producer) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e, ok := <-p.Events():
+			if !ok {
+				return
+			}
+			switch ev := e.(type) {
+			case *kafka.Message:
+				if ev.TopicPartition.Error != nil {
+					log.Error(
+						"Kafka: Delivery failed",
+						slog.String("topic", *ev.TopicPartition.Topic),
+						slog.Any("error", ev.TopicPartition.Error),
+					)
+				} else {
+					log.Debug(
+						"Kafka: Delivered message",
+						slog.String("topic", *ev.TopicPartition.Topic),
+						slog.Int("partition", int(ev.TopicPartition.Partition)),
+					)
+				}
+			}
+		}
 	}
-
-	return nil
 }
 
 // Ping checks if the Kafka cluster is reachable by requesting metadata.
@@ -147,4 +134,53 @@ func (ps *PubSub) Ping(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (ps *PubSub) Stop() {
+	// Wait up to 15 seconds for outstanding messages to be delivered
+	ps.producer.Flush(15 * 1000)
+	ps.producer.Close()
+}
+
+func (ps *PubSub) Produce(key, data []byte) error {
+	retryBackoff := ps.cfg.ProducerRetryBackoff * time.Millisecond
+
+	var err error
+	for i := 0; i < ps.cfg.ProducerMaxRetries; i++ {
+		err = ps.producer.Produce(
+			&kafka.Message{
+				TopicPartition: kafka.TopicPartition{
+					Topic:     &ps.cfg.Topic,
+					Partition: kafka.PartitionAny,
+				},
+				Key:   key,
+				Value: data,
+			},
+			nil,
+		)
+
+		if err == nil {
+			return nil
+		}
+
+		// If the internal librdkafka queue is full, we retry with a short backoff.
+		if kerr, ok := err.(kafka.Error); ok && kerr.Code() == kafka.ErrQueueFull {
+			ps.log.Warn("kafka local queue full, retrying",
+				slog.Int("attempt", i+1),
+				slog.Duration("backoff", retryBackoff),
+			)
+
+			if i < ps.cfg.ProducerMaxRetries-1 {
+				time.Sleep(retryBackoff)
+				retryBackoff *= 2
+			}
+
+			continue
+		}
+
+		// For any other non-transient error, we stop immediately.
+		break
+	}
+
+	return fmt.Errorf("failed to enqueue kafka message after retries: %w", err)
 }

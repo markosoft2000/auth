@@ -49,3 +49,5 @@ kafka:
   message_timeout_ms: 900000
   socket_keepalive_enable: true
   queue_buffering_max_msgs: 100000
+  producer_max_retries: 3
+  producer_retry_backoff_ms: 10ms

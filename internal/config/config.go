@@ -79,6 +79,9 @@ type KafkaConfig struct {
 	MessageTimeoutMs      int    `yaml:"message_timeout_ms" env-default:"900000"`
 	SocketKeepaliveEnable bool   `yaml:"socket_keepalive_enable" env-default:"true"`
 	QueueBufferingMaxMsgs int    `yaml:"queue_buffering_max_msgs" env-default:"100000"`
+
+	ProducerMaxRetries   int           `yaml:"producer_max_retries" env-default:"3"`
+	ProducerRetryBackoff time.Duration `yaml:"producer_retry_backoff" env-default:"10ms"`
 }
 
 var once sync.Once

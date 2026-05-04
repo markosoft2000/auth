@@ -105,6 +105,9 @@ func main() {
 		MessageTimeoutMs:      cfg.Kafka.MessageTimeoutMs,
 		SocketKeepaliveEnable: cfg.Kafka.SocketKeepaliveEnable,
 		QueueBufferingMaxMsgs: cfg.Kafka.QueueBufferingMaxMsgs,
+
+		ProducerMaxRetries:   cfg.Kafka.ProducerMaxRetries,
+		ProducerRetryBackoff: cfg.Kafka.ProducerRetryBackoff,
 	})
 	if err != nil {
 		log.Error("failed to init kafka", slog.Any("error", err))

@@ -2,4 +2,4 @@ version: v2
 modules:
   - path: proto  # This tells buf to look in the 'proto' directory
 deps:
-  # - buf.build/bufbuild/protovalidate
+  - buf.build/bufbuild/protovalidate

@@ -1,36 +1,47 @@
 package validator
 
-// // UnaryServerInterceptor returns a new unary server interceptor that validates messages.
-// func UnaryServerInterceptor(l *slog.Logger) grpc.UnaryServerInterceptor {
-// 	const op = "grpc_auth.validator.interceptor"
+import (
+	"context"
+	"log/slog"
 
-// 	log := l.With(slog.String("op", op))
+	"buf.build/go/protovalidate"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+)
 
-// 	v, err := protovalidate.New()
-// 	if err != nil {
-// 		panic("failed to initialize validator: " + err.Error())
-// 	}
+// UnaryServerInterceptor returns a new unary server interceptor that validates messages.
+func UnaryServerInterceptor(l *slog.Logger) grpc.UnaryServerInterceptor {
+	const op = "grpc_auth.validator.interceptor"
 
-// 	return func(
-// 		ctx context.Context,
-// 		req any,
-// 		info *grpc.UnaryServerInfo,
-// 		handler grpc.UnaryHandler,
-// 	) (any, error) {
-// 		msg, ok := req.(proto.Message)
-// 		if !ok {
-// 			return handler(ctx, req)
-// 		}
+	log := l.With(slog.String("op", op))
 
-// 		if err := v.Validate(msg); err != nil {
-// 			log.Warn("request validation failed",
-// 				slog.String("method", info.FullMethod),
-// 				slog.Any("error", err),
-// 			)
+	v, err := protovalidate.New()
+	if err != nil {
+		panic("failed to initialize validator: " + err.Error())
+	}
 
-// 			return nil, status.Error(codes.InvalidArgument, err.Error())
-// 		}
+	return func(
+		ctx context.Context,
+		req any,
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (any, error) {
+		msg, ok := req.(proto.Message)
+		if !ok {
+			return handler(ctx, req)
+		}
 
-// 		return handler(ctx, req)
-// 	}
-// }
+		if err := v.Validate(msg); err != nil {
+			log.Warn("request validation failed",
+				slog.String("method", info.FullMethod),
+				slog.Any("error", err),
+			)
+
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		return handler(ctx, req)
+	}
+}

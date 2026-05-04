@@ -8,7 +8,7 @@ import (
 	"time"
 
 	authgrpc "github.com/markosoft2000/auth/internal/grpc/auth"
-	// "github.com/markosoft2000/auth/internal/grpc/interceptors/validator"
+	"github.com/markosoft2000/auth/internal/grpc/interceptors/validator"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
@@ -57,7 +57,7 @@ func New(
 	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		recovery.UnaryServerInterceptor(recoveryOpts...),
 		logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
-		// validator.UnaryServerInterceptor(log),
+		validator.UnaryServerInterceptor(log),
 	))
 
 	healthSrv := health.NewServer()

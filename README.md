@@ -117,11 +117,11 @@ sudo docker compose exec kafka-1 kafka-topics --bootstrap-server kafka-1:29092 -
 describe topic:
 
 ``` sh
-sudo docker compose exec kafka-1 kafka-topics --bootstrap-server kafka-1:29092 --describe --topic auth-user-activity
+sudo docker compose exec kafka-1 kafka-topics --bootstrap-server kafka-1:29092 --describe --topic auth-user-activity-v1
 ```
 
 consume topic:
 
 ``` sh
-sudo docker compose exec kafka-1 kafka-console-consumer --bootstrap-server kafka-1:29092 --topic auth-user-activity --from-beginning
+sudo docker compose exec kafka-1 kafka-console-consumer --bootstrap-server kafka-1:29092 --topic auth-user-activity-v1 --from-beginning
 ```

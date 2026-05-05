@@ -10,6 +10,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/lib/pq"
 	"github.com/markosoft2000/auth/internal/config"
 )
 
@@ -29,12 +30,12 @@ func main() {
 	log.Printf("Starting database migration process (path: %s)", migrationsPath)
 
 	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		dbcfg.User,
-		dbcfg.Password,
-		dbcfg.Host,
-		dbcfg.Port,
-		dbcfg.Database,
-		dbcfg.SSLMode,
+		dbcfg.Direct.User,
+		dbcfg.Direct.Password,
+		dbcfg.Direct.Host,
+		dbcfg.Direct.Port,
+		dbcfg.Direct.Database,
+		dbcfg.Direct.SSLMode,
 	)
 
 	db, err := sql.Open("postgres", connectionString)
@@ -49,7 +50,7 @@ func main() {
 	}
 	defer driver.Close()
 
-	m, err := migrate.NewWithDatabaseInstance("file://migrations", "postgres", driver)
+	m, err := migrate.NewWithDatabaseInstance(fmt.Sprintf("file://%s", migrationsPath), "postgres", driver)
 	if err != nil {
 		log.Fatal(err)
 	}

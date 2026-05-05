@@ -56,7 +56,9 @@ func (s *Storage) RefreshToken(
 
 	query += " ORDER BY created_at DESC LIMIT 1"
 
-	err := s.replicaPool.QueryRow(ctx, query, args...).Scan(
+	// Using masterPool instead of replicaPool to ensure we can read the token
+	// immediately after it is created, avoiding issues with replication lag.
+	err := s.masterPool.QueryRow(ctx, query, args...).Scan(
 		&tokenModel.UserID,
 		&tokenModel.AppID,
 		&tokenModel.Token,

@@ -46,11 +46,17 @@ type HasherConfig struct {
 }
 
 type PostgresConfig struct {
-	Host     string `yaml:"host" env:"DB_HOST" env-default:"localhost"`
-	Port     int    `yaml:"port" env:"DB_PORT" env-default:"5432"`
-	User     string `yaml:"user" env:"DB_USER" env-required:"true"`
-	Password string `yaml:"password" env:"DB_PASSWORD" env-required:"true"`
-	Database string `yaml:"database" env:"DB_NAME" env-required:"true"`
+	Direct  PostgresNodeConfig `yaml:"direct" env-prefix:"DB_DIRECT_"`
+	Master  PostgresNodeConfig `yaml:"master" env-prefix:"DB_MASTER_"`
+	Replica PostgresNodeConfig `yaml:"replicas" env-prefix:"DB_REPLICA_"`
+}
+
+type PostgresNodeConfig struct {
+	Host     string `yaml:"host" env:"HOST" env-required:"true"`
+	Port     int    `yaml:"port" env:"PORT" env-required:"true"`
+	User     string `yaml:"user" env:"USER" env-required:"true"`
+	Password string `yaml:"password" env:"PASSWORD" env-required:"true"`
+	Database string `yaml:"database" env:"NAME" env-required:"true"`
 	SSLMode  string `yaml:"ssl_mode" env-default:"disable"`
 }
 
@@ -66,9 +72,9 @@ type CachingConfig struct {
 }
 
 type KafkaConfig struct {
-	BootstrapServers      string `yaml:"bootstrap_servers" env:"localhost:9092" env-required:"true"`
-	ClientID              string `yaml:"client_id" env:"auth-producer:" env-required:"true"`
-	Topic                 string `yaml:"topic" env:"auth-user-activity-v1" env-required:"true"`
+	BootstrapServers      string `yaml:"bootstrap_servers" env:"KAFKA_BOOTSTRAP_SERVERS" env-default:"localhost:9092" env-required:"true"`
+	ClientID              string `yaml:"client_id" env:"KAFKA_CLIENT_ID" env-default:"auth-producer:" env-required:"true"`
+	Topic                 string `yaml:"topic" env:"KAFKA_TOPIC" env-default:"auth-user-activity-v1" env-required:"true"`
 	BatchNumMessages      int    `yaml:"batch_num_messages" env-default:"1000"`
 	LingerMs              int    `yaml:"linger_ms" env-default:"50"`
 	CompressionType       string `yaml:"compression_type" env-default:"lz4"`
@@ -84,32 +90,34 @@ type KafkaConfig struct {
 	ProducerRetryBackoff time.Duration `yaml:"producer_retry_backoff" env-default:"10ms"`
 }
 
-var once sync.Once
+var (
+	cfg  *Config
+	once sync.Once
+)
 
 func MustLoad() *Config {
-	var configPath string
 	once.Do(func() {
-		flag.StringVar(&configPath, "config", "", "path to config file")
-		flag.Parse()
+		var configPath string
+		fs := flag.NewFlagSet("auth", flag.ContinueOnError)
+		fs.StringVar(&configPath, "config", "", "path to config file")
+		_ = fs.Parse(os.Args[1:])
+
+		if configPath == "" {
+			configPath = os.Getenv("CONFIG_PATH")
+			if configPath == "" {
+				panic("CONFIG_PATH is not set")
+			}
+		}
+
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			panic("config file does not exist: " + configPath)
+		}
+
+		cfg = &Config{}
+		if err := cleanenv.ReadConfig(configPath, cfg); err != nil {
+			panic("cannot read config: " + err.Error())
+		}
 	})
 
-	if configPath == "" {
-		configPath = os.Getenv("CONFIG_PATH")
-		if configPath == "" {
-			panic("CONFIG_PATH is not set")
-		}
-	}
-
-	// Check if file exists
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		panic("config file does not exist: " + configPath)
-	}
-
-	var cfg Config
-
-	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
-		panic("cannot read config: " + err.Error())
-	}
-
-	return &cfg
+	return cfg
 }

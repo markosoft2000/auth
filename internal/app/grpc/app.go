@@ -113,13 +113,13 @@ func (a *App) Run() error {
 func (a *App) Stop() {
 	const op = "grpcapp.Stop"
 
-	a.log.With(slog.String("op", op)).Info("stopping grpc server", slog.Int("port", a.port))
-	a.gRPCServer.GracefulStop()
-
 	// Signal the HealthCheck goroutine to stop
 	if a.healthCheckCancel != nil {
 		a.healthCheckCancel()
 	}
+
+	a.log.With(slog.String("op", op)).Info("stopping grpc server", slog.Int("port", a.port))
+	a.gRPCServer.GracefulStop()
 }
 
 func (a *App) HealthCheck(ctx context.Context) {
@@ -152,7 +152,7 @@ func (a *App) HealthCheck(ctx context.Context) {
 			a.healthSrv.SetServingStatus("auth.Auth", status)
 
 		case <-ctx.Done():
-			a.log.Info("HealthCheck goroutine stopped due to context cancellation")
+			a.log.Debug("HealthCheck goroutine stopped due to context cancellation")
 			return
 		}
 	}

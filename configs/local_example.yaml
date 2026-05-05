@@ -19,12 +19,27 @@ hasher:
   salt_length: 16
   key_length: 32
 postgres:
-  host: "db"
-  port: 5432
-  user: "postgres"
-  password: "example"
-  database: "auth_db"
-  ssl_mode: "disable"
+  direct:
+    host: "db"
+    port: 5432
+    user: "postgres"
+    password: "example"
+    database: "auth_db"
+    ssl_mode: "disable"
+  master:
+    host: "pgbouncer-master"
+    port: 6432
+    user: "postgres"
+    password: "example"
+    database: "auth_db"
+    ssl_mode: "disable"
+  replicas:
+    host: "pgbouncer-replicas"
+    port: 6433
+    user: "postgres"
+    password: "example"
+    database: "auth_db"
+    ssl_mode: "disable"
 redis:
   addresses:
     - "redis-1:6379"
@@ -38,7 +53,7 @@ caching:
 kafka:
   bootstrap_servers: "kafka-1:29092,kafka-2:29092,kafka-3:29092"
   client_id: "auth-producer:"
-  topic: "auth-user-activity"
+  topic: "auth-user-activity-v1"
   batch_num_messages: 1000
   linger_ms: 50
   compression_type: "lz4"

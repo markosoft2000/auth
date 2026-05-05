@@ -41,7 +41,7 @@ func New(masterPoolCfg, replicaPoolCfg *Config) (*Storage, error) {
 func createPool(cfg *Config) (*pgxpool.Pool, error) {
 	const op = "storage.postgres.createPool"
 
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s default_query_exec_mode=simple_protocol",
 		cfg.Host,
 		cfg.Port,
 		cfg.User,

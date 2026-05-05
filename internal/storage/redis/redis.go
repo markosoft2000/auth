@@ -42,5 +42,9 @@ func New(cfg Config) (*Storage, error) {
 }
 
 func (s *Storage) Stop() {
+	if s == nil || s.client == nil {
+		return
+	}
+
 	s.client.Close()
 }

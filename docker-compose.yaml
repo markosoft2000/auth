@@ -16,6 +16,61 @@ services:
       timeout: 5s
       retries: 5
 
+  pgbouncer-master:
+    image: public.ecr.aws/bitnami/pgbouncer:1
+    environment:
+      - PGBOUNCER_DATABASE=auth_db
+      - POSTGRESQL_DATABASE=auth_db
+      - POSTGRESQL_HOST=db
+      - POSTGRESQL_PORT=5432
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_PASSWORD=example
+      - PGBOUNCER_POOL_MODE=transaction
+      - PGBOUNCER_PORT=6432
+      - PGBOUNCER_MAX_CLIENT_CONN=1000
+      - PGBOUNCER_DEFAULT_POOL_SIZE=20
+      - PGBOUNCER_MIN_POOL_SIZE=10
+      - PGBOUNCER_RESERVE_POOL_SIZE=5
+      - PGBOUNCER_IGNORE_STARTUP_PARAMETERS=extra_float_digits
+      - PGBOUNCER_AUTH_TYPE=trust
+      - PGBOUNCER_AUTH_USER=postgres
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "printf '' > /dev/tcp/127.0.0.1/6432"]
+      start_period: 10s
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  pgbouncer-replicas:
+    image: public.ecr.aws/bitnami/pgbouncer:1
+    environment:
+      - PGBOUNCER_DATABASE=auth_db
+      - POSTGRESQL_DATABASE=auth_db
+      - POSTGRESQL_HOST=db
+      - POSTGRESQL_PORT=5432
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_PASSWORD=example
+      - PGBOUNCER_POOL_MODE=transaction
+      - PGBOUNCER_PORT=6433
+      - PGBOUNCER_MAX_CLIENT_CONN=1000
+      - PGBOUNCER_DEFAULT_POOL_SIZE=20
+      - PGBOUNCER_MIN_POOL_SIZE=10
+      - PGBOUNCER_RESERVE_POOL_SIZE=5
+      - PGBOUNCER_IGNORE_STARTUP_PARAMETERS=extra_float_digits
+      - PGBOUNCER_AUTH_TYPE=trust
+      - PGBOUNCER_AUTH_USER=postgres
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "printf '' > /dev/tcp/127.0.0.1/6433"]
+      start_period: 10s
+      interval: 10s
+      timeout: 10s
+      retries: 5
     # Master Nodes
   redis-1: &redis-node
     image: redis:7-alpine
@@ -172,12 +227,17 @@ services:
       kafka-1:
         condition: service_healthy
     command: >
-      sh -c "kafka-topics --create --if-not-exists --bootstrap-server kafka-1:29092 --partitions 3 --replication-factor 3 --topic auth-user-activity --config min.insync.replicas=2 --config retention.ms=1200000 --config segment.ms=1200000"
+      sh -c "kafka-topics --create --if-not-exists --bootstrap-server kafka-1:29092 --partitions 3 --replication-factor 3 --topic auth-user-activity-v1 --config min.insync.replicas=2 --config retention.ms=1200000 --config segment.ms=1200000"
   # One-time service to run migrations
   migrator:
     build: .
     environment:
       CONFIG_PATH: "./configs/local.yaml"
+      DB_DIRECT_HOST: db
+      DB_DIRECT_PORT: 5432
+      DB_DIRECT_USER: postgres
+      DB_DIRECT_PASSWORD: example
+      DB_DIRECT_NAME: auth_db
     command: ["./migrator", "up"]
     depends_on:
       db:
@@ -196,8 +256,20 @@ services:
     restart: always
     environment:
       CONFIG_PATH: "./configs/local.yaml"
+      DB_MASTER_HOST: pgbouncer-master
+      DB_MASTER_PORT: 6432
+      DB_MASTER_USER: postgres
+      DB_MASTER_PASSWORD: example
+      DB_MASTER_NAME: auth_db
+      DB_REPLICA_HOST: pgbouncer-replicas
+      DB_REPLICA_PORT: 6433
+      DB_REPLICA_USER: postgres
+      DB_REPLICA_PASSWORD: example
+      DB_REPLICA_NAME: auth_db
     depends_on:
-      db:
+      pgbouncer-master:
+        condition: service_healthy
+      pgbouncer-replicas:
         condition: service_healthy
       redis-cluster-creator:
         condition: service_completed_successfully

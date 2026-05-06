@@ -189,6 +189,8 @@ services:
 
   kafka-2:
     image: confluentinc/cp-kafka:7.4.0
+    ports:
+      - "9093:9093"
     environment:
       KAFKA_NODE_ID: 2
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
@@ -206,6 +208,8 @@ services:
 
   kafka-3:
     image: confluentinc/cp-kafka:7.4.0
+    ports:
+      - "9094:9094"
     environment:
       KAFKA_NODE_ID: 3
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'

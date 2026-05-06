@@ -59,7 +59,7 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash string) (
 		var pgErr *pgconn.PgError
 		// if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-			return 0, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
+			return 0, fmt.Errorf("%s: %w", op, storage.ErrUserExists)
 		}
 
 		return 0, fmt.Errorf("%s: %w", op, err)

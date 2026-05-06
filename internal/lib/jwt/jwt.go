@@ -13,12 +13,12 @@ func GenerateToken(
 	duration time.Duration,
 	appSecret []byte,
 ) (string, error) {
-	key, err := jwt.ParseRSAPrivateKeyFromPEM(appSecret)
+	key, err := jwt.ParseEdPrivateKeyFromPEM(appSecret)
 	if err != nil {
 		return "", err
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims{
 		"sub":    user.ID,
 		"email":  user.Email,
 		"exp":    time.Now().Add(duration).Unix(),

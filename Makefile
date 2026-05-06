@@ -1,14 +1,18 @@
+export CONFIG_PATH=configs/local.yaml
+CONFIG_PATH = configs/local.yaml
+TEST_CONFIG_PATH = configs/local_tests.yaml
+
 migrate-up: ## Database migration up
-	@go run cmd/migrator/main.go up
+	@DB_DIRECT_HOST=localhost go run cmd/migrator/main.go --migrations-path=migrations -config=$(CONFIG_PATH) up
 
 migrate-down: ## Database migration down
-	@go run cmd/migrator/main.go down
+	@DB_DIRECT_HOST=localhost go run cmd/migrator/main.go --migrations-path=migrations -config=$(CONFIG_PATH) down
 
 migrate-up-test: ## Run migrations for the test DB
-	@CONFIG_PATH=$(TEST_CONFIG_PATH) go run cmd/migrator/main.go --migrations-path=tests/migrations up
+	@go run cmd/migrator/main.go --migrations-path=tests/migrations -config=$(TEST_CONFIG_PATH) up
 
 migrate-down-test: ## Run migrations for the test DB
-	@CONFIG_PATH=$(TEST_CONFIG_PATH) go run cmd/migrator/main.go --migrations-path=tests/migrations down
+	@go run cmd/migrator/main.go --migrations-path=tests/migrations -config=$(TEST_CONFIG_PATH) down
 
 run-test:
 	@echo "--- Building Server ---"
@@ -19,14 +23,17 @@ run-test:
 	@make migrate-up-test 
 
 	@echo "--- Starting Test Server ---"
+
+	@fuser -k 50001/tcp 8081/tcp 2>/dev/null || true
+
 	# Start Server in background with test config
-	@CONFIG_PATH=$(shell pwd)/$(TEST_CONFIG_PATH) ./bin/auth-server & \
+	@KAFKA_BOOTSTRAP_SERVERS="localhost:9092,localhost:9093,localhost:9094" ./bin/auth-server -config=$(shell pwd)/$(TEST_CONFIG_PATH) > /dev/null 2>&1 & \
 	PID=$$!; \
 	echo "Server PID: $$PID"; \
 	sleep 2; \
 	\
 	echo "--- Running Tests ---"; \
-	CONFIG_PATH=$(shell pwd)/$(TEST_CONFIG_PATH) go test -v -count=1 ./tests/...; \
+	go test -v -count=1 ./tests/... -args -config=$(shell pwd)/$(TEST_CONFIG_PATH); \
 	EXIT_CODE=$$?; \
 	\
 	echo "--- Cleaning Up ---"; \

@@ -54,7 +54,7 @@ func TestRegister_EmptyPassword(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 	assert.Contains(t, err.Error(), "password")
-	assert.Contains(t, err.Error(), "validation errors")
+	assert.Contains(t, err.Error(), "validation error")
 }
 
 func TestLogin_InvalidCredentials(t *testing.T) {

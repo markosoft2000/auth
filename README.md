@@ -8,7 +8,7 @@ A high-performance, production-ready authentication service is designed as a gRP
 2. **Security-First Design**:
     - **Password Hashing**: Uses **Argon2**, the winner of the Password Hashing Competition, which is resistant to GPU-based cracking.
     - **Encryption**: Employs **AES-GCM** (Galois/Counter Mode) to encrypt sensitive data (like app-specific secrets) before storing them in the database.
-    - **JWT RS256**: Uses asymmetric signing (RSA) for tokens, allowing client services to verify tokens using a public key without needing the private secret.
+    - **JWT EdDSA**: Uses asymmetric signing (Ed25519) for tokens, providing better security and performance with smaller keys compared to RSA.
 3. **High Availability Storage**:
     - **PostgreSQL**: Configured with a strategy for Master/Replica separation (via HAProxy/PgBouncer comments in the code) to avoid single points of failure.
     - **Redis Cluster**: Uses a 6-node Redis cluster for high-performance caching of application metadata and session tokens.
@@ -23,7 +23,7 @@ A high-performance, production-ready authentication service is designed as a gRP
 
 - **gRPC API**: Fast and type-safe communication.
 - **Argon2id Hashing**: Industry-standard secure password hashing.
-- **JWT with RS256**: Asymmetric token signing for secure verification.
+- **JWT with EdDSA**: Asymmetric token signing using Ed25519 for secure verification.
 - **Layered Caching**: Integration with **Redis Cluster** for low-latency lookups.
 - **Database Encryption**: Sensitive application data is encrypted at rest using **AES-GCM**.
 - **High Availability**: Designed to work with PostgreSQL replicas and Redis clusters.
@@ -33,7 +33,7 @@ A high-performance, production-ready authentication service is designed as a gRP
 
 ## 🛠️ Tech Stack
 
-- **Language**: Go 1.22+
+- **Language**: Go 1.24+
 - **Database**: PostgreSQL 14
 - **Cache**: Redis 7 (Cluster Mode)
 - **Communication**: gRPC & Protocol Buffers
@@ -67,6 +67,25 @@ docker-compose up -d
 ```
 
 The gRPC server will be available at `localhost:50001` and the HTTP metrics/health at `localhost:8081`.
+
+---
+
+### Gen a private key for an app
+
+To generate a secure Ed25519 key pair and prepare the private key for registration via the API:
+
+```bash
+# 1. Generate the private key
+openssl genpkey -algorithm Ed25519 -out private.pem
+
+# 2. Extract the public key (for client services)
+openssl pkey -in private.pem -pubout -out public.pem
+
+# 3. Prepare for API registration (Base64 encode the whole PEM file)
+base64 -w 0 private.pem
+```
+
+Use public key to verify JWT tokens in gateway service
 
 ---
 

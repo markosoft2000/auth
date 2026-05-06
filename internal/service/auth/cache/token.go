@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	_ "github.com/markosoft2000/auth/internal/domain/models"
 	auth "github.com/markosoft2000/auth/internal/service/auth"
@@ -33,8 +34,8 @@ func NewTokenCache(
 func (c *tokenCache) RefreshToken(
 	ctx context.Context,
 	token string,
-	userID int64,
-	appID int,
+	userID uuid.UUID,
+	appID uuid.UUID,
 ) (*models.RefreshToken, error) {
 	if token == "" {
 		return c.next.RefreshToken(ctx, token, userID, appID)
@@ -78,8 +79,8 @@ func (c *tokenCache) SaveRefreshToken(
 func (c *tokenCache) RevokeToken(
 	ctx context.Context,
 	token string,
-	userID int64,
-	appID int,
+	userID uuid.UUID,
+	appID uuid.UUID,
 ) error {
 	const op = "cache.TokenCache.RevokeToken"
 
@@ -97,7 +98,7 @@ func (c *tokenCache) RevokeToken(
 	return nextErr
 }
 
-func (c *tokenCache) RevokeAllUserTokens(ctx context.Context, userID int64) error {
+func (c *tokenCache) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error {
 	const op = "cache.TokenCache.RevokeAllUserTokens"
 
 	log := c.log.With(slog.String("op", op))
@@ -112,7 +113,7 @@ func (c *tokenCache) RevokeAllUserTokens(ctx context.Context, userID int64) erro
 	return nextErr
 }
 
-func (c *tokenCache) RevokeAllAppTokens(ctx context.Context, appID int) error {
+func (c *tokenCache) RevokeAllAppTokens(ctx context.Context, appID uuid.UUID) error {
 	const op = "cache.TokenCache.RevokeAllAppTokens"
 
 	log := c.log.With(slog.String("op", op))

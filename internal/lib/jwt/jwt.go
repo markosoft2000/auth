@@ -4,12 +4,13 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 )
 
 func GenerateToken(
 	user *models.User,
-	appID int,
+	appID uuid.UUID,
 	duration time.Duration,
 	appSecret []byte,
 ) (string, error) {
@@ -36,9 +37,9 @@ func GenerateToken(
 }
 
 type CustomTokenClaims struct {
-	UserID int64  `json:"sub"`
-	Email  string `json:"email"`
-	AppID  int    `json:"app_id"`
+	UserID uuid.UUID `json:"sub"`
+	Email  string    `json:"email"`
+	AppID  uuid.UUID `json:"app_id"`
 	jwt.RegisteredClaims
 }
 

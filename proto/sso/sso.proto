@@ -39,13 +39,13 @@ message RegisterRequest {
 }
 
 message RegisterResponse {
-  int64 user_id = 1;
+  string user_id = 1;
 }
 
 message LoginRequest {
   string email = 1;
   string password = 2 [(buf.validate.field).string.min_len = 8];
-  int32 app_id = 3 [(buf.validate.field).int32.gt = 0];
+  string app_id = 3 [(buf.validate.field).string.len = 36];
   string ip = 4 [(buf.validate.field).string.ip = true];
 }
 
@@ -55,8 +55,8 @@ message LoginResponse {
 }
 
 message LogoutRequest {
-  int64 user_id = 1 [(buf.validate.field).int64.gt = 0];
-  int32 app_id = 2 [(buf.validate.field).int32.gt = 0];
+  string user_id = 1 [(buf.validate.field).string.len = 36];
+  string app_id = 2 [(buf.validate.field).string.len = 36];
   bool all_app = 3;
 }
 
@@ -65,7 +65,7 @@ message LogoutResponse {
 }
 
 message IsAdminRequest {
-  int64 user_id = 1 [(buf.validate.field).int64.gt = 0];
+  string user_id = 1 [(buf.validate.field).string.len = 36];
 }
 
 message IsAdminResponse {
@@ -88,11 +88,11 @@ message AddAppRequest {
 }
 
 message AddAppResponse {
-  int32 id = 1;
+  string id = 1;
 } 
 
 message RemoveAppRequest {
-  int32 id = 1 [(buf.validate.field).int32.gt = 0];
+  string id = 1 [(buf.validate.field).string.len = 36];
 }
 
 message RemoveAppResponse {

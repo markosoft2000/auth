@@ -74,7 +74,7 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 	respLogin, err := st.AuthClient.Login(ctx, &authv1.LoginRequest{
 		Email:    email,
 		Password: "wrongPassword",
-		AppId:    1,
+		AppId:    AppID,
 		Ip:       "1.1.1.1",
 	})
 

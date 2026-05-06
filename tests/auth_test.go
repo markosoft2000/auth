@@ -23,6 +23,8 @@ MC4CAQAwBQYDK2VwBCIEIDIX990wBqjSUJpPrqG9XNv270LxwwJW7kJurcTugllG
 -----END PRIVATE KEY-----`
 )
 
+var AppID = "018e3b5c-a4b2-7b3f-9c4a-2d8f1e0a5b6c"
+
 func TestRegister_HappyPath(t *testing.T) {
 	t.Parallel()
 
@@ -83,9 +85,9 @@ func TestLogin_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	claims := tokenClaims.(jwt.MapClaims)
 
-	assert.Equal(t, respReg.GetUserId(), int64(claims["sub"].(float64)))
+	assert.Equal(t, respReg.GetUserId(), claims["sub"].(string))
 	assert.Equal(t, email, claims["email"].(string))
-	assert.Equal(t, respAddApp.GetId(), int32(claims["app_id"].(float64)))
+	assert.Equal(t, respAddApp.GetId(), claims["app_id"].(string))
 
 	expectedExpiration := time.Now().Add(st.Cfg.TokenTTL).Unix()
 	const deltaSeconds = 1

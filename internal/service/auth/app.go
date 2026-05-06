@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	"github.com/markosoft2000/auth/internal/storage"
 )
 
 // AddApp adds a new app with a secret or private key
-func (a *Auth) AddApp(ctx context.Context, appName string, appSecret []byte) (id int, err error) {
+func (a *Auth) AddApp(ctx context.Context, appName string, appSecret []byte) (id uuid.UUID, err error) {
 	const op = "auth.AddApp"
 	log := a.log.With(slog.String("op", op), slog.String("app_name", appName))
 
@@ -21,10 +22,18 @@ func (a *Auth) AddApp(ctx context.Context, appName string, appSecret []byte) (id
 	if err != nil {
 		log.Error("failed to encrypt secret", slog.Any("error", err.Error()))
 
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	appID, err := uuid.NewV7()
+	if err != nil {
+		log.Error("Failed to generate UUID", slog.Any("error", err))
+
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	app := &models.App{
+		ID:     appID,
 		Name:   appName,
 		Secret: encryptedSecret,
 	}
@@ -34,21 +43,21 @@ func (a *Auth) AddApp(ctx context.Context, appName string, appSecret []byte) (id
 		if errors.Is(err, storage.ErrAppExists) {
 			log.Error("app already exists", slog.Any("error", err))
 
-			return 0, fmt.Errorf("%s: %w", op, ErrAppExists)
+			return uuid.Nil, fmt.Errorf("%s: %w", op, ErrAppExists)
 		}
 
 		log.Error("failed to save app", slog.Any("error", err))
 
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return id, nil
 }
 
 // RemoveApp deletes app
-func (a *Auth) RemoveApp(ctx context.Context, appID int) error {
+func (a *Auth) RemoveApp(ctx context.Context, appID uuid.UUID) error {
 	const op = "auth.RemoveApp"
-	log := a.log.With(slog.String("op", op), slog.Int("app_id", appID))
+	log := a.log.With(slog.String("op", op), slog.String("app_id", appID.String()))
 
 	log.Info("removing app")
 
@@ -65,7 +74,7 @@ func (a *Auth) RemoveApp(ctx context.Context, appID int) error {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	log.Warn("Revoking all refresh tokens for APP ID", slog.Int("app_id", appID))
+	log.Warn("Revoking all refresh tokens for APP ID", slog.String("app_id", appID.String()))
 
 	// clean up all refresh tokens associated with that app_id to ensure no active sessions remain
 	err = a.tokenManager.RevokeAllAppTokens(ctx, appID)

@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	"github.com/markosoft2000/auth/internal/lib/jwt"
 	"github.com/markosoft2000/auth/internal/storage"
@@ -21,10 +22,10 @@ const (
 )
 
 type userActivityEvent struct {
-	EventType string `json:"event_type"`
-	UserID    int64  `json:"user_id"`
-	AppID     int64  `json:"app_id"`
-	Timestamp string `json:"timestamp"`
+	EventType string    `json:"event_type"`
+	UserID    uuid.UUID `json:"user_id"`
+	AppID     uuid.UUID `json:"app_id"`
+	Timestamp string    `json:"timestamp"`
 }
 
 // RegisterNewUser registers a new user
@@ -32,7 +33,7 @@ func (a *Auth) RegisterNewUser(
 	ctx context.Context,
 	email string,
 	pass string,
-) (int64, error) {
+) (uuid.UUID, error) {
 	const op = "auth.RegisterNewUser"
 	log := a.log.With(slog.String("op", op), slog.String("email", email))
 
@@ -42,20 +43,31 @@ func (a *Auth) RegisterNewUser(
 	if err != nil {
 		log.Error("failed to hash password", slog.Any("error", err.Error()))
 
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	id, err := a.userSaver.SaveUser(ctx, email, passHash)
+	userID, err := uuid.NewV7()
+	if err != nil {
+		log.Error("Failed to generate UUID", slog.Any("error", err))
+
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	id, err := a.userSaver.SaveUser(ctx, &models.User{
+		ID:       userID,
+		Email:    email,
+		PassHash: passHash,
+	})
 	if err != nil {
 		if errors.Is(err, storage.ErrUserExists) {
 			log.Error("user exists", slog.Any("error", err))
 
-			return 0, fmt.Errorf("%s: %w", op, ErrUserExists)
+			return uuid.Nil, fmt.Errorf("%s: %w", op, ErrUserExists)
 		}
 
 		log.Error("failed to save user", slog.Any("error", err))
 
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return id, nil
@@ -66,7 +78,7 @@ func (a *Auth) Login(
 	ctx context.Context,
 	email string,
 	password string,
-	appID int,
+	appID uuid.UUID,
 	ip string,
 ) (
 	accessToken string,
@@ -110,7 +122,7 @@ func (a *Auth) Login(
 
 	decryptedAppSecret, err := a.cipher.Decrypt(app.Secret)
 	if err != nil {
-		log.Warn("invalid app key", slog.Int("app_id", app.ID))
+		log.Warn("invalid app key", slog.String("app_id", app.ID.String()))
 
 		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidAppKey)
 	}
@@ -135,11 +147,11 @@ func (a *Auth) Login(
 	}
 
 	// get&revoke old token
-	oldRefreshToken, err := a.tokenManager.RefreshToken(ctx, "", user.ID, int(appID))
+	oldRefreshToken, err := a.tokenManager.RefreshToken(ctx, "", user.ID, appID)
 	if err != nil && !errors.Is(err, storage.ErrRefreshTokenNotFound) {
 		log.Error("failed to get refresh token", slog.Any("error", err))
 	} else if oldRefreshToken != nil {
-		err = a.tokenManager.RevokeToken(ctx, oldRefreshToken.Token, user.ID, int(appID))
+		err = a.tokenManager.RevokeToken(ctx, oldRefreshToken.Token, user.ID, appID)
 		if err != nil {
 			log.Error("failed to revoke refresh token", slog.Any("error", err))
 
@@ -167,22 +179,22 @@ func (a *Auth) Login(
 
 	log.Info("user logged in successfully")
 
-	go a.sendUserActivityEvent(userActivityLogin, user.ID, int64(app.ID))
+	go a.sendUserActivityEvent(userActivityLogin, user.ID, app.ID)
 
 	return accessToken, refreshToken, nil
 }
 
 func (a *Auth) Logout(
 	ctx context.Context,
-	userID int64,
-	appID int64,
+	userID uuid.UUID,
+	appID uuid.UUID,
 	allApp bool,
 ) error {
 	const op = "auth.Logout"
 	log := a.log.With(
 		slog.String("op", op),
-		slog.Int64("user_id", userID),
-		slog.Int64("app_id", appID),
+		slog.String("user_id", userID.String()),
+		slog.String("app_id", appID.String()),
 		slog.Bool("all_app", allApp),
 	)
 
@@ -196,12 +208,12 @@ func (a *Auth) Logout(
 			return fmt.Errorf("%s: %w", op, err)
 		}
 
-		go a.sendUserActivityEvent(userActivityLogoutAllApps, userID, 0)
+		go a.sendUserActivityEvent(userActivityLogoutAllApps, userID, uuid.Nil)
 
 		return nil
 	}
 
-	refreshToken, err := a.tokenManager.RefreshToken(ctx, "", userID, int(appID))
+	refreshToken, err := a.tokenManager.RefreshToken(ctx, "", userID, appID)
 	if err != nil {
 		if errors.Is(err, storage.ErrRefreshTokenNotFound) {
 			log.Error("refresh token not found", slog.Any("error", err))
@@ -219,7 +231,7 @@ func (a *Auth) Logout(
 	}
 
 	// revoking the token
-	err = a.tokenManager.RevokeToken(ctx, refreshToken.Token, userID, int(appID))
+	err = a.tokenManager.RevokeToken(ctx, refreshToken.Token, userID, appID)
 	if err != nil {
 		log.Error("failed to revoke refresh token", slog.Any("error", err))
 
@@ -232,13 +244,13 @@ func (a *Auth) Logout(
 }
 
 // sendUserActivityEvent serializes and produces an auth event to the Kafka topic.
-func (a *Auth) sendUserActivityEvent(eventType string, userID int64, appID int64) {
+func (a *Auth) sendUserActivityEvent(eventType string, userID uuid.UUID, appID uuid.UUID) {
 	op := "auth.sendUserActivityEvent"
 	log := a.log.With(
 		slog.String("op", op),
 		slog.String("event_type", eventType),
-		slog.Int64("user_id", userID),
-		slog.Int64("app_id", appID),
+		slog.String("user_id", userID.String()),
+		slog.String("app_id", appID.String()),
 	)
 
 	event := userActivityEvent{
@@ -254,7 +266,7 @@ func (a *Auth) sendUserActivityEvent(eventType string, userID int64, appID int64
 		return
 	}
 
-	key := fmt.Appendf(nil, "%d", userID)
+	key := []byte(userID.String())
 	if err := a.pubsub.Produce(key, data); err != nil {
 		log.Error("failed to push event to pubsub", slog.Any("error", err))
 	}

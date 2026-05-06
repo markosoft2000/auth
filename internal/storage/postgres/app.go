@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -12,7 +13,7 @@ import (
 	"github.com/markosoft2000/auth/internal/storage"
 )
 
-func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
+func (s *Storage) App(ctx context.Context, appID uuid.UUID) (*models.App, error) {
 	const op = "storage.postgres.App"
 
 	app := &models.App{}
@@ -30,26 +31,26 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 	return app, nil
 }
 
-func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err error) {
+func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id uuid.UUID, err error) {
 	const op = "storage.postgres.SaveApp"
 
-	query := "INSERT INTO apps(name, secret) VALUES($1, $2) RETURNING id"
+	query := "INSERT INTO apps(id, name, secret) VALUES($1, $2, $3) RETURNING id"
 
-	err = s.masterPool.QueryRow(ctx, query, app.Name, app.Secret).Scan(&id)
+	err = s.masterPool.QueryRow(ctx, query, app.ID, app.Name, app.Secret).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		// if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-			return 0, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
+			return uuid.Nil, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
 		}
 
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return id, nil
 }
 
-func (s *Storage) DeleteApp(ctx context.Context, appID int) error {
+func (s *Storage) DeleteApp(ctx context.Context, appID uuid.UUID) error {
 	const op = "storage.postgres.DeleteApp"
 
 	query := "DELETE FROM apps WHERE id = $1"

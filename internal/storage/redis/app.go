@@ -3,8 +3,8 @@ package redis
 import (
 	"context"
 	"fmt"
-	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	"github.com/markosoft2000/auth/internal/storage"
 	"github.com/redis/rueidis"
@@ -14,12 +14,12 @@ const (
 	appPrefix = "app:"
 )
 
-func getAppKey(appID int) string {
-	return appPrefix + strconv.Itoa(appID)
+func getAppKey(appID uuid.UUID) string {
+	return appPrefix + appID.String()
 }
 
 // App provides app
-func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
+func (s *Storage) App(ctx context.Context, appID uuid.UUID) (*models.App, error) {
 	const op = "storage.redis.App"
 
 	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
@@ -50,7 +50,7 @@ func (s *Storage) App(ctx context.Context, appID int) (*models.App, error) {
 }
 
 // SaveApp saves app
-func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err error) {
+func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id uuid.UUID, err error) {
 	const op = "storage.redis.SaveApp"
 
 	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)
@@ -65,14 +65,14 @@ func (s *Storage) SaveApp(ctx context.Context, app *models.App) (id int, err err
 		Build()).Error()
 
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return app.ID, nil
 }
 
 // DeleteApp deletes app
-func (s *Storage) DeleteApp(ctx context.Context, appID int) error {
+func (s *Storage) DeleteApp(ctx context.Context, appID uuid.UUID) error {
 	const op = "storage.redis.DeleteApp"
 
 	ctxOp, OpCancel := context.WithTimeout(ctx, s.cfg.OperationTimeout)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -30,7 +31,7 @@ func (s *Storage) User(ctx context.Context, email string) (*models.User, error) 
 	return user, nil
 }
 
-func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
+func (s *Storage) IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	const op = "storage.postgres.IsAdmin"
 
 	var isAdmin bool
@@ -48,21 +49,21 @@ func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	return isAdmin, nil
 }
 
-func (s *Storage) SaveUser(ctx context.Context, email string, passHash string) (uid int64, err error) {
+func (s *Storage) SaveUser(ctx context.Context, user *models.User) (uid uuid.UUID, err error) {
 	const op = "storage.postgres.SaveUser"
 
-	var id int64
-	query := "INSERT INTO users(email, pass_hash) VALUES($1, $2) RETURNING id"
+	var id uuid.UUID
+	query := "INSERT INTO users(id, email, pass_hash) VALUES($1, $2, $3) RETURNING id"
 
-	err = s.masterPool.QueryRow(ctx, query, email, passHash).Scan(&id)
+	err = s.masterPool.QueryRow(ctx, query, user.ID, user.Email, user.PassHash).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		// if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-			return 0, fmt.Errorf("%s: %w", op, storage.ErrUserExists)
+			return uuid.Nil, fmt.Errorf("%s: %w", op, storage.ErrUserExists)
 		}
 
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return id, nil

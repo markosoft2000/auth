@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 )
 
@@ -33,23 +34,19 @@ type Storage struct {
 // UserProvider handles User-related reads
 type UserProvider interface {
 	User(ctx context.Context, email string) (*models.User, error)
-	IsAdmin(ctx context.Context, userID int64) (bool, error)
+	IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
 // UserSaver handles User-related writes
 type UserSaver interface {
-	SaveUser(
-		ctx context.Context,
-		email string,
-		passHash string,
-	) (uid int64, err error)
+	SaveUser(ctx context.Context, user *models.User) (uid uuid.UUID, err error)
 }
 
 // AppManager handles Application-related metadata (for JWT signing/secrets)
 type AppManager interface {
-	App(ctx context.Context, appID int) (*models.App, error)
-	SaveApp(ctx context.Context, app *models.App) (id int, err error)
-	DeleteApp(ctx context.Context, appID int) error
+	App(ctx context.Context, appID uuid.UUID) (*models.App, error)
+	SaveApp(ctx context.Context, app *models.App) (id uuid.UUID, err error)
+	DeleteApp(ctx context.Context, appID uuid.UUID) error
 }
 
 // TokenManager handles storing tokens
@@ -57,15 +54,15 @@ type TokenManager interface {
 	RefreshToken(
 		ctx context.Context,
 		token string,
-		userID int64,
-		appID int,
+		userID uuid.UUID,
+		appID uuid.UUID,
 	) (*models.RefreshToken, error)
 
 	SaveRefreshToken(ctx context.Context, token *models.RefreshToken) error
 
-	RevokeToken(ctx context.Context, token string, userID int64, appID int) error
-	RevokeAllUserTokens(ctx context.Context, userID int64) error
-	RevokeAllAppTokens(ctx context.Context, appID int) error
+	RevokeToken(ctx context.Context, token string, userID uuid.UUID, appID uuid.UUID) error
+	RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error
+	RevokeAllAppTokens(ctx context.Context, appID uuid.UUID) error
 }
 
 var (

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	auth "github.com/markosoft2000/auth/internal/service/auth"
 	"github.com/markosoft2000/auth/internal/storage"
@@ -25,7 +26,7 @@ func NewAppCache(log *slog.Logger, cache auth.AppManager, next auth.AppManager) 
 	}
 }
 
-func (c *appCache) App(ctx context.Context, appID int) (*models.App, error) {
+func (c *appCache) App(ctx context.Context, appID uuid.UUID) (*models.App, error) {
 	const op = "cache.AppCache.App"
 
 	log := c.log.With(slog.String("op", op))
@@ -48,11 +49,11 @@ func (c *appCache) App(ctx context.Context, appID int) (*models.App, error) {
 	return app, nil
 }
 
-func (c *appCache) SaveApp(ctx context.Context, app *models.App) (id int, err error) {
+func (c *appCache) SaveApp(ctx context.Context, app *models.App) (id uuid.UUID, err error) {
 	return c.next.SaveApp(ctx, app)
 }
 
-func (c *appCache) DeleteApp(ctx context.Context, appID int) error {
+func (c *appCache) DeleteApp(ctx context.Context, appID uuid.UUID) error {
 	const op = "cache.AppCache.DeleteApp"
 
 	log := c.log.With(slog.String("op", op))

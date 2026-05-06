@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	"github.com/markosoft2000/auth/internal/storage"
 	"github.com/redis/rueidis"
@@ -15,32 +16,32 @@ import (
 )
 
 const (
-	tokenKey      = "{app:%d}:refresh-token:%s"
-	appTag        = "{app:%d}:tag"
+	tokenKey      = "{app:%s}:refresh-token:%s"
+	appTag        = "{app:%s}:tag"
 	appTagPattern = "{app:*}:tag"
-	userTag       = "{user:%d}:tag"
+	userTag       = "{user:%s}:tag"
 
 	deleteAppTokenLimit                 = 10000
 	revokeAllUserTokensConcurrencyLimit = 10
 )
 
-func getTokenKey(token string, appID int) string {
-	return fmt.Sprintf(tokenKey, appID, token)
+func getTokenKey(token string, appID uuid.UUID) string {
+	return fmt.Sprintf(tokenKey, appID.String(), token)
 }
 
-func getAppTagKey(appID int) string {
-	return fmt.Sprintf(appTag, appID)
+func getAppTagKey(appID uuid.UUID) string {
+	return fmt.Sprintf(appTag, appID.String())
 }
 
-func getUserTagKey(userID int64) string {
-	return fmt.Sprintf(userTag, userID)
+func getUserTagKey(userID uuid.UUID) string {
+	return fmt.Sprintf(userTag, userID.String())
 }
 
 func (s *Storage) RefreshToken(
 	ctx context.Context,
 	token string,
-	userID int64,
-	appID int,
+	userID uuid.UUID,
+	appID uuid.UUID,
 ) (*models.RefreshToken, error) {
 	const op = "storage.redis.RefreshToken"
 
@@ -144,8 +145,8 @@ func (s *Storage) addKeyToSet(tag, key string, expire time.Duration) rueidis.Com
 func (s *Storage) RevokeToken(
 	ctx context.Context,
 	token string,
-	userID int64,
-	appID int,
+	userID uuid.UUID,
+	appID uuid.UUID,
 ) error {
 	const op = "storage.redis.RevokeToken"
 
@@ -217,7 +218,7 @@ func (s *Storage) getAllAppSets(ctx context.Context) ([]string, error) {
 	return keys, nil
 }
 
-func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
+func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error {
 	op := "storage.redis.RevokeAllUserTokens"
 
 	userTagKey := getUserTagKey(userID)
@@ -292,7 +293,7 @@ func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 	return s.client.Do(ctx, s.client.B().Del().Key(userTagKey).Build()).Error()
 }
 
-func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
+func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID uuid.UUID) error {
 	const op = "storage.redis.RevokeAllAppTokens"
 
 	tag := getAppTagKey(appID)

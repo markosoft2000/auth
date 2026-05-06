@@ -6,19 +6,20 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/storage"
 )
 
-func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
+func (a *Auth) IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	const op = "auth.IsAdmin"
 
-	log := a.log.With(slog.String("op", op), slog.Int64("user_id", userID))
+	log := a.log.With(slog.String("op", op), slog.String("user_id", userID.String()))
 
 	log.Info("role check - is admin")
 
 	isAdmin, err := a.userProvider.IsAdmin(ctx, userID)
 	if err != nil {
-		if errors.Is(err, storage.ErrAppNotFound) {
+		if errors.Is(err, storage.ErrUserNotFound) {
 			log.Error("failed to check admin status", slog.Any("error", err))
 
 			return false, fmt.Errorf("%s: %w", op, ErrUserNotFound)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	"github.com/markosoft2000/auth/internal/storage"
@@ -37,8 +38,8 @@ func (s *Storage) SaveRefreshToken(
 func (s *Storage) RefreshToken(
 	ctx context.Context,
 	token string,
-	userID int64,
-	appID int,
+	userID uuid.UUID,
+	appID uuid.UUID,
 ) (*models.RefreshToken, error) {
 	const op = "storage.postgres.RefreshToken"
 
@@ -81,8 +82,8 @@ func (s *Storage) RefreshToken(
 func (s *Storage) RevokeToken(
 	ctx context.Context,
 	token string,
-	userID int64,
-	appID int,
+	userID uuid.UUID,
+	appID uuid.UUID,
 ) error {
 	const op = "storage.postgres.RevokeToken"
 
@@ -106,7 +107,7 @@ func (s *Storage) RevokeToken(
 	return nil
 }
 
-func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
+func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error {
 	const op = "storage.postgres.RevokeAllUserTokens"
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 and revoked = FALSE"
@@ -123,7 +124,7 @@ func (s *Storage) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 	return nil
 }
 
-func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID int) error {
+func (s *Storage) RevokeAllAppTokens(ctx context.Context, appID uuid.UUID) error {
 	const op = "storage.postgres.RevokeAllAppTokens"
 
 	query := "UPDATE refresh_tokens SET revoked = TRUE WHERE app_id = $1 and revoked = FALSE"

@@ -51,8 +51,8 @@ func (a *Auth) RefreshToken(
 
 	log = a.log.With(
 		slog.String("op", op),
-		slog.Int64("user_id", user.ID),
-		slog.Int("app_id", app.ID),
+		slog.String("user_id", user.ID.String()),
+		slog.String("app_id", app.ID.String()),
 	)
 
 	/*
@@ -115,7 +115,7 @@ func (a *Auth) RefreshToken(
 	// OK
 	decryptedAppSecret, err := a.cipher.Decrypt(app.Secret)
 	if err != nil {
-		log.Warn("invalid app key", slog.Int("app_id", app.ID))
+		log.Warn("invalid app key", slog.String("app_id", app.ID.String()))
 
 		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidAppKey)
 	}

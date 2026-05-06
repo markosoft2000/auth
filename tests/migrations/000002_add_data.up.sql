@@ -1,9 +1,5 @@
 INSERT INTO apps (id, name, secret)
-VALUES (1, 'testApp', '-----BEGIN PRIVATE KEY-----
+VALUES ('018e3b5c-a4b2-7b3f-9c4a-2d8f1e0a5b6c', 'testApp', '-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIDIX990wBqjSUJpPrqG9XNv270LxwwJW7kJurcTugllG
 -----END PRIVATE KEY-----')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO admins (id, is_admin)
-VALUES (1, TRUE)
 ON CONFLICT DO NOTHING;

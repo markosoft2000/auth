@@ -13,7 +13,6 @@ import (
 type Config struct {
 	BootstrapServers      string
 	ClientID              string
-	Topic                 string
 	BatchNumMessages      int
 	LingerMs              int
 	CompressionType       string
@@ -27,6 +26,9 @@ type Config struct {
 
 	ProducerMaxRetries   int
 	ProducerRetryBackoff time.Duration
+
+	TopicUserActivity string
+	TopicAppKey       string
 }
 
 type PubSub struct {
@@ -142,30 +144,67 @@ func (ps *PubSub) Stop() {
 	ps.producer.Close()
 }
 
-func (ps *PubSub) Produce(key, data []byte) error {
+func (ps *PubSub) ProduceAppKeyEvent(key, data []byte) error {
+	op := "auth.Kafka.ProduceAppKeyEvent"
+
+	log := ps.log.With(slog.String("op", op))
+
+	err := ps.withRetry(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     &ps.cfg.TopicAppKey,
+			Partition: kafka.PartitionAny,
+		},
+		Key:   key,
+		Value: data,
+	})
+	if err != nil {
+		log.Error("failed to enqueue kafka message", slog.Any("error", err))
+
+		return fmt.Errorf("failed to enqueue kafka message: %w", err)
+	}
+
+	return nil
+}
+
+func (ps *PubSub) ProduceUserActivityEvent(key, data []byte) error {
+	op := "auth.Kafka.ProduceUserActivityEvent"
+
+	log := ps.log.With(slog.String("op", op))
+
+	err := ps.withRetry(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     &ps.cfg.TopicUserActivity,
+			Partition: kafka.PartitionAny,
+		},
+		Key:   key,
+		Value: data,
+	})
+	if err != nil {
+		log.Error("failed to enqueue kafka message", slog.Any("error", err))
+
+		return fmt.Errorf("failed to enqueue kafka message: %w", err)
+	}
+
+	return nil
+}
+
+func (ps *PubSub) withRetry(msg *kafka.Message) error {
+	const op = "auth.Kafka.withRetry"
+
 	retryBackoff := ps.cfg.ProducerRetryBackoff * time.Millisecond
 
 	var err error
 	for i := 0; i < ps.cfg.ProducerMaxRetries; i++ {
-		err = ps.producer.Produce(
-			&kafka.Message{
-				TopicPartition: kafka.TopicPartition{
-					Topic:     &ps.cfg.Topic,
-					Partition: kafka.PartitionAny,
-				},
-				Key:   key,
-				Value: data,
-			},
-			nil,
-		)
-
+		err = ps.producer.Produce(msg, nil)
 		if err == nil {
 			return nil
 		}
 
 		// If the internal librdkafka queue is full, we retry with a short backoff.
 		if kerr, ok := err.(kafka.Error); ok && kerr.Code() == kafka.ErrQueueFull {
-			ps.log.Warn("kafka local queue full, retrying",
+			ps.log.With(slog.String("op", op)).Warn("kafka local queue full, retrying",
+				slog.String("topic", *msg.TopicPartition.Topic),
+				slog.Int("partition", int(msg.TopicPartition.Partition)),
 				slog.Int("attempt", i+1),
 				slog.Duration("backoff", retryBackoff),
 			)

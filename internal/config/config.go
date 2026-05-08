@@ -75,7 +75,6 @@ type CachingConfig struct {
 type KafkaConfig struct {
 	BootstrapServers      string `yaml:"bootstrap_servers" env:"KAFKA_BOOTSTRAP_SERVERS" env-default:"localhost:9092" env-required:"true"`
 	ClientID              string `yaml:"client_id" env:"KAFKA_CLIENT_ID" env-default:"auth-producer:" env-required:"true"`
-	Topic                 string `yaml:"topic" env:"KAFKA_TOPIC" env-default:"auth-user-activity-v1" env-required:"true"`
 	BatchNumMessages      int    `yaml:"batch_num_messages" env-default:"1000"`
 	LingerMs              int    `yaml:"linger_ms" env-default:"50"`
 	CompressionType       string `yaml:"compression_type" env-default:"lz4"`
@@ -89,6 +88,9 @@ type KafkaConfig struct {
 
 	ProducerMaxRetries   int           `yaml:"producer_max_retries" env-default:"3"`
 	ProducerRetryBackoff time.Duration `yaml:"producer_retry_backoff" env-default:"10ms"`
+
+	TopicUserActivity string `yaml:"topic-user-activity" env:"KAFKA_TOPIC_USER_ACTIVITY" env-default:"auth-user-activity-v1" env-required:"true"`
+	TopicAppKey       string `yaml:"topic-app-key" env:"KAFKA_TOPIC_APP_KEY" env-default:"auth-app-key-v1" env-required:"true"`
 }
 
 var (

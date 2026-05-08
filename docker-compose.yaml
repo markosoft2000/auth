@@ -230,8 +230,12 @@ services:
     depends_on:
       kafka-1:
         condition: service_healthy
-    command: >
-      sh -c "kafka-topics --create --if-not-exists --bootstrap-server kafka-1:29092 --partitions 3 --replication-factor 3 --topic auth-user-activity-v1 --config min.insync.replicas=2 --config retention.ms=1200000 --config segment.ms=1200000"
+    command: 
+      - sh
+      - -c
+      - |
+        kafka-topics --create --if-not-exists --bootstrap-server kafka-1:29092 --partitions 3 --replication-factor 3 --topic auth-user-activity-v1 --config min.insync.replicas=2 --config retention.ms=1200000 --config segment.ms=1200000 && \
+        kafka-topics --create --if-not-exists --bootstrap-server kafka-1:29092 --partitions 3 --replication-factor 3 --topic auth-app-key-v1 --config min.insync.replicas=2 --config retention.ms=-1 --config cleanup.policy=compact --config segment.ms=86400000
   # One-time service to run migrations
   migrator:
     build: .

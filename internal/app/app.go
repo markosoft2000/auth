@@ -187,7 +187,6 @@ func newKafkaPubSub(ctx context.Context, log *slog.Logger, cfg *config.KafkaConf
 	pubsub, err := kafka.New(ctx, log, kafka.Config{
 		BootstrapServers:      cfg.BootstrapServers,
 		ClientID:              cfg.ClientID,
-		Topic:                 cfg.Topic,
 		BatchNumMessages:      cfg.BatchNumMessages,
 		LingerMs:              cfg.LingerMs,
 		CompressionType:       cfg.CompressionType,
@@ -201,6 +200,9 @@ func newKafkaPubSub(ctx context.Context, log *slog.Logger, cfg *config.KafkaConf
 
 		ProducerMaxRetries:   cfg.ProducerMaxRetries,
 		ProducerRetryBackoff: cfg.ProducerRetryBackoff,
+
+		TopicUserActivity: cfg.TopicUserActivity,
+		TopicAppKey:       cfg.TopicAppKey,
 	})
 	if err != nil {
 		log.Error("failed to init kafka", slog.Any("error", err))

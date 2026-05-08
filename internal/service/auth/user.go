@@ -267,7 +267,7 @@ func (a *Auth) sendUserActivityEvent(eventType string, userID uuid.UUID, appID u
 	}
 
 	key := []byte(userID.String())
-	if err := a.pubsub.Produce(key, data); err != nil {
+	if err := a.pubsub.ProduceUserActivityEvent(key, data); err != nil {
 		log.Error("failed to push event to pubsub", slog.Any("error", err))
 	}
 }

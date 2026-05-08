@@ -21,7 +21,8 @@ type Cipher interface {
 }
 
 type PubSub interface {
-	Produce(key, data []byte) error
+	ProduceUserActivityEvent(key, data []byte) error
+	ProduceAppKeyEvent(key, data []byte) error
 }
 
 type Storage struct {

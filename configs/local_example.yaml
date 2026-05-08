@@ -53,7 +53,8 @@ caching:
 kafka:
   bootstrap_servers: "kafka-1:29092,kafka-2:29092,kafka-3:29092"
   client_id: "auth-producer:"
-  topic: "auth-user-activity-v1"
+  topic-user-activity: "auth-user-activity-v1"
+  topic-app-key: "auth-app-key-v1"
   batch_num_messages: 1000
   linger_ms: 50
   compression_type: "lz4"

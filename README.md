@@ -121,10 +121,14 @@ func GetIP(r *http.Request) string {
 
 ### Kafka topic creation:
 
+[ ! ] topics are created with docker-compose automatically
+
+or manually:
+
 ```sh
-kafka-configs --bootstrap-server localhost:9092 \
-  --entity-type topics --entity-name auth-user-activity.v1 \
-  --add-config min.insync.replicas=1,retention.ms=1200000,segment.ms=1200000
+kafka-topics --create --if-not-exists --bootstrap-server kafka-1:29092 --partitions 3 --replication-factor 3 --topic auth-user-activity-v1 --config min.insync.replicas=2 --config retention.ms=1200000 --config segment.ms=1200000
+
+kafka-topics --create --if-not-exists --bootstrap-server kafka-1:29092 --partitions 3 --replication-factor 3 --topic auth-app-key-v1 --config min.insync.replicas=2 --config retention.ms=-1 --config cleanup.policy=compact --config segment.ms=86400000
 ```
 
 list of topics:
@@ -143,6 +147,10 @@ consume topic:
 
 ``` sh
 sudo docker compose exec kafka-1 kafka-console-consumer --bootstrap-server kafka-1:29092 --topic auth-user-activity-v1 --from-beginning
+```
+
+``` sh
+sudo docker compose exec kafka-1 kafka-console-consumer --bootstrap-server kafka-1:29092 --topic auth-app-key-v1 --from-beginning
 ```
 
 ---

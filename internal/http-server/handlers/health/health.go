@@ -47,6 +47,8 @@ func New(log *slog.Logger, db Pinger) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Error("failed to encode health response", slog.Any("error", err))
+		}
 	}
 }

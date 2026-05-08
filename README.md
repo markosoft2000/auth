@@ -144,3 +144,30 @@ consume topic:
 ``` sh
 sudo docker compose exec kafka-1 kafka-console-consumer --bootstrap-server kafka-1:29092 --topic auth-user-activity-v1 --from-beginning
 ```
+
+---
+
+### Auto delete of refresh tokens expired more than N months ago
+
+enabled in your PostgreSQL configuration (postgresql.conf):
+```
+shared_preload_libraries = 'pg_cron'
+cron.database_name = 'auth_db' # OR replace with your actual DB name
+```
+
+add in postgres cli
+
+``` sql
+CREATE INDEX CONCURRENTLY idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
+-- Enable the extension
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+```
+
+Schedule the deletion of tokens that expired more than a month ago. running daily at midnight.
+
+``` sql
+SELECT cron.schedule('cleanup-old-refresh-tokens', '0 0 * * *', $$
+    DELETE FROM refresh_tokens 
+    WHERE expires_at < NOW() - INTERVAL '1 month'
+$$);
+```

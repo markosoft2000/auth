@@ -20,7 +20,6 @@ import (
 )
 
 type App struct {
-	ctx context.Context
 	cfg *config.Config
 	log *slog.Logger
 
@@ -101,7 +100,6 @@ func New(
 	}
 
 	return &App{
-		ctx: ctx,
 		cfg: cfg,
 		log: log,
 
@@ -128,10 +126,12 @@ func (app *App) MustRun() {
 	}()
 }
 
-func (app *App) Stop() {
+func (app *App) Stop(ctx context.Context) {
 	app.log.Info("shutting down gracefully...")
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(app.ctx, 10*time.Second)
+	start := time.Now()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer shutdownCancel()
 
 	if err := app.httpServer.Shutdown(shutdownCtx); err != nil {
@@ -146,7 +146,7 @@ func (app *App) Stop() {
 	}
 	app.pgStorage.Stop()
 
-	app.log.Info("server stopped")
+	app.log.Info("server stopped in ", slog.Duration("duration (ms)", time.Duration(time.Since(start).Milliseconds())))
 }
 
 func newPGStorage(log *slog.Logger, cfg *config.PostgresConfig) *postgres.Storage {

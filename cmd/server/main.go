@@ -35,7 +35,7 @@ func main() {
 	// Wait for SIGINT or SIGTERM
 	<-sigCtx.Done()
 
-	app.Stop()
+	app.Stop(ctx)
 }
 
 func setupLogger(env string) *slog.Logger {

@@ -37,6 +37,10 @@ func (c *tokenCache) RefreshToken(
 	userID uuid.UUID,
 	appID uuid.UUID,
 ) (*models.RefreshToken, error) {
+	const op = "cache.TokenCache.RefreshToken"
+
+	log := c.log.With(slog.String("op", op))
+
 	if token == "" {
 		return c.next.RefreshToken(ctx, token, userID, appID)
 	}
@@ -48,7 +52,11 @@ func (c *tokenCache) RefreshToken(
 			return nil, nextErr
 		}
 
-		go c.cache.SaveRefreshToken(ctx, storedToken)
+		go func() {
+			if err := c.cache.SaveRefreshToken(ctx, storedToken); err != nil {
+				log.Error("failed to save token to cache", slog.Any("error", cacheErr))
+			}
+		}()
 
 		return storedToken, nil
 	}

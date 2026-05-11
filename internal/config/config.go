@@ -11,18 +11,18 @@ import (
 )
 
 type Config struct {
-	Env                    string           `yaml:"env" env:"ENV" env-default:"local"`
 	Postgres               PostgresConfig   `yaml:"postgres"`
+	Kafka                  KafkaConfig      `yaml:"kafka"`
+	Env                    string           `yaml:"env" env:"ENV" env-default:"local"`
+	MasterSecret           string           `yaml:"master_secret"`
+	Redis                  RedisConfig      `yaml:"redis"`
 	HTTPServer             HTTPServerConfig `yaml:"http_server"`
+	Caching                CachingConfig    `yaml:"caching"`
 	GRPC                   GRPCConfig       `yaml:"grpc"`
 	TokenTTL               time.Duration    `yaml:"token_ttl" env-default:"1h"`
 	RefreshTokenTTL        time.Duration    `yaml:"refresh_token_ttl" env-default:"720h"`
 	ReissueRefreshTokenTTL time.Duration    `yaml:"reissue_refresh_token_ttl" env-default:"24h"`
 	Hasher                 HasherConfig     `yaml:"hasher"`
-	MasterSecret           string           `yaml:"master_secret"`
-	Redis                  RedisConfig      `yaml:"redis"`
-	Caching                CachingConfig    `yaml:"caching"`
-	Kafka                  KafkaConfig      `yaml:"kafka"`
 }
 
 type HTTPServerConfig struct {
@@ -54,11 +54,11 @@ type PostgresConfig struct {
 
 type PostgresNodeConfig struct {
 	Host     string `yaml:"host" env:"HOST" env-required:"true"`
-	Port     int    `yaml:"port" env:"PORT" env-required:"true"`
 	User     string `yaml:"user" env:"USER" env-required:"true"`
 	Password string `yaml:"password" env:"PASSWORD" env-required:"true"`
 	Database string `yaml:"database" env:"NAME" env-required:"true"`
 	SSLMode  string `yaml:"ssl_mode" env-default:"disable"`
+	Port     int    `yaml:"port" env:"PORT" env-required:"true"`
 }
 
 type RedisConfig struct {
@@ -73,24 +73,22 @@ type CachingConfig struct {
 }
 
 type KafkaConfig struct {
-	BootstrapServers      string `yaml:"bootstrap_servers" env:"KAFKA_BOOTSTRAP_SERVERS" env-default:"localhost:9092" env-required:"true"`
-	ClientID              string `yaml:"client_id" env:"KAFKA_CLIENT_ID" env-default:"auth-producer:" env-required:"true"`
-	BatchNumMessages      int    `yaml:"batch_num_messages" env-default:"1000"`
-	LingerMs              int    `yaml:"linger_ms" env-default:"50"`
-	CompressionType       string `yaml:"compression_type" env-default:"lz4"`
-	Acks                  string `yaml:"acks" env-default:"all"`
-	EnableIdempotence     bool   `yaml:"enable_idempotence" env-default:"true"`
-	Retries               int    `yaml:"retries" env-default:"2000"`         // a bit more than 15 minutes * 60 secs * 500 ms (retry.backoff.ms)
-	RetryBackoffMs        int    `yaml:"retry_backoff_ms" env-default:"500"` // Wait 500ms between retries
-	MessageTimeoutMs      int    `yaml:"message_timeout_ms" env-default:"900000"`
-	SocketKeepaliveEnable bool   `yaml:"socket_keepalive_enable" env-default:"true"`
-	QueueBufferingMaxMsgs int    `yaml:"queue_buffering_max_msgs" env-default:"100000"`
-
-	ProducerMaxRetries   int           `yaml:"producer_max_retries" env-default:"3"`
-	ProducerRetryBackoff time.Duration `yaml:"producer_retry_backoff" env-default:"10ms"`
-
-	TopicUserActivity string `yaml:"topic-user-activity" env:"KAFKA_TOPIC_USER_ACTIVITY" env-default:"auth-user-activity-v1" env-required:"true"`
-	TopicAppKey       string `yaml:"topic-app-key" env:"KAFKA_TOPIC_APP_KEY" env-default:"auth-app-key-v1" env-required:"true"`
+	BootstrapServers      string        `yaml:"bootstrap_servers" env:"KAFKA_BOOTSTRAP_SERVERS" env-default:"localhost:9092" env-required:"true"`
+	ClientID              string        `yaml:"client_id" env:"KAFKA_CLIENT_ID" env-default:"auth-producer:" env-required:"true"`
+	TopicAppKey           string        `yaml:"topic-app-key" env:"KAFKA_TOPIC_APP_KEY" env-default:"auth-app-key-v1" env-required:"true"`
+	TopicUserActivity     string        `yaml:"topic-user-activity" env:"KAFKA_TOPIC_USER_ACTIVITY" env-default:"auth-user-activity-v1" env-required:"true"`
+	CompressionType       string        `yaml:"compression_type" env-default:"lz4"`
+	Acks                  string        `yaml:"acks" env-default:"all"`
+	RetryBackoffMs        int           `yaml:"retry_backoff_ms" env-default:"500"`
+	Retries               int           `yaml:"retries" env-default:"2000"`
+	MessageTimeoutMs      int           `yaml:"message_timeout_ms" env-default:"900000"`
+	QueueBufferingMaxMsgs int           `yaml:"queue_buffering_max_msgs" env-default:"100000"`
+	ProducerMaxRetries    int           `yaml:"producer_max_retries" env-default:"3"`
+	ProducerRetryBackoff  time.Duration `yaml:"producer_retry_backoff" env-default:"10ms"`
+	LingerMs              int           `yaml:"linger_ms" env-default:"50"`
+	BatchNumMessages      int           `yaml:"batch_num_messages" env-default:"1000"`
+	EnableIdempotence     bool          `yaml:"enable_idempotence" env-default:"true"`
+	SocketKeepaliveEnable bool          `yaml:"socket_keepalive_enable" env-default:"true"`
 }
 
 var (

@@ -24,13 +24,13 @@ type Pinger interface {
 }
 
 type App struct {
-	log               *slog.Logger
-	gRPCServer        *grpc.Server
-	port              int
-	healthSrv         *health.Server
 	dbPinger          Pinger
 	pubsubPinger      Pinger
-	healthCheckCancel context.CancelFunc // To cancel the HealthCheck goroutine
+	log               *slog.Logger
+	gRPCServer        *grpc.Server
+	healthSrv         *health.Server
+	healthCheckCancel context.CancelFunc
+	port              int
 }
 
 func New(

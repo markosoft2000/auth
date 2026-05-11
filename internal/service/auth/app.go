@@ -20,8 +20,8 @@ const (
 
 type appKeyEvent struct {
 	EventType string    `json:"event_type"`
-	AppID     uuid.UUID `json:"app_id"`
 	PublicKey string    `json:"public_key"`
+	AppID     uuid.UUID `json:"app_id"`
 }
 
 // AddApp adds a new app with a secret or private key

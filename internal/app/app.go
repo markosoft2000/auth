@@ -184,7 +184,7 @@ func newPGStorage(log *slog.Logger, cfg *config.PostgresConfig) *postgres.Storag
 }
 
 func newKafkaPubSub(ctx context.Context, log *slog.Logger, cfg *config.KafkaConfig) *kafka.PubSub {
-	pubsub, err := kafka.New(ctx, log, kafka.Config{
+	pubsub, err := kafka.New(ctx, log, &kafka.Config{
 		BootstrapServers:      cfg.BootstrapServers,
 		ClientID:              cfg.ClientID,
 		BatchNumMessages:      cfg.BatchNumMessages,

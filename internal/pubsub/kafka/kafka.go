@@ -13,34 +13,32 @@ import (
 type Config struct {
 	BootstrapServers      string
 	ClientID              string
-	BatchNumMessages      int
-	LingerMs              int
+	TopicAppKey           string
+	TopicUserActivity     string
 	CompressionType       string
 	Acks                  string
-	EnableIdempotence     bool
-	Retries               int
 	RetryBackoffMs        int
+	Retries               int
 	MessageTimeoutMs      int
-	SocketKeepaliveEnable bool
 	QueueBufferingMaxMsgs int
-
-	ProducerMaxRetries   int
-	ProducerRetryBackoff time.Duration
-
-	TopicUserActivity string
-	TopicAppKey       string
+	ProducerMaxRetries    int
+	ProducerRetryBackoff  time.Duration
+	LingerMs              int
+	BatchNumMessages      int
+	EnableIdempotence     bool
+	SocketKeepaliveEnable bool
 }
 
 type PubSub struct {
 	producer *kafka.Producer
-	cfg      Config
 	log      *slog.Logger
+	cfg      *Config
 }
 
 func New(
 	ctx context.Context,
 	log *slog.Logger,
-	cfg Config,
+	cfg *Config,
 ) (*PubSub, error) {
 	const op = "pubsub.kafka.New"
 

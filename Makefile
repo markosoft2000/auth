@@ -15,6 +15,12 @@ lint: ## Run golangci-lint
 	fi
 	@$(shell go env GOPATH)/bin/golangci-lint run ./...
 
+fix:
+	@if ! command -v fieldalignment >/dev/null 2>&1; then \
+		go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest; \
+	fi
+	@fieldalignment -fix ./...
+
 migrate-up: ## Database migration up
 	@DB_DIRECT_HOST=localhost go run cmd/migrator/main.go --migrations-path=migrations -config=$(CONFIG_PATH) up
 

@@ -84,10 +84,6 @@ type AuthCfg struct {
 }
 
 type Auth struct {
-	log                    *slog.Logger
-	tokenTTL               time.Duration
-	refreshTokenTTL        time.Duration
-	reissueRefreshTokenTTL time.Duration
 	hasher                 Hasher
 	cipher                 Cipher
 	userSaver              UserSaver
@@ -95,6 +91,10 @@ type Auth struct {
 	appManager             AppManager
 	tokenManager           TokenManager
 	pubsub                 PubSub
+	log                    *slog.Logger
+	tokenTTL               time.Duration
+	refreshTokenTTL        time.Duration
+	reissueRefreshTokenTTL time.Duration
 }
 
 func New(

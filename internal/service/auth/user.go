@@ -23,9 +23,9 @@ const (
 
 type userActivityEvent struct {
 	EventType string    `json:"event_type"`
+	Timestamp string    `json:"timestamp"`
 	UserID    uuid.UUID `json:"user_id"`
 	AppID     uuid.UUID `json:"app_id"`
-	Timestamp string    `json:"timestamp"`
 }
 
 // RegisterNewUser registers a new user

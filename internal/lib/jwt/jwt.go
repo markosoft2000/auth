@@ -41,10 +41,10 @@ func GenerateToken(
 }
 
 type CustomTokenClaims struct {
-	UserID uuid.UUID `json:"sub"`
-	Email  string    `json:"email"`
-	AppID  uuid.UUID `json:"app_id"`
 	jwt.RegisteredClaims
+	Email  string    `json:"email"`
+	UserID uuid.UUID `json:"sub"`
+	AppID  uuid.UUID `json:"app_id"`
 }
 
 func GetClaimsUnverified(token string) (*CustomTokenClaims, error) {

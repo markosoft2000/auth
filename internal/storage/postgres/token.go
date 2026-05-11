@@ -57,9 +57,7 @@ func (s *Storage) RefreshToken(
 
 	query += " ORDER BY created_at DESC LIMIT 1"
 
-	// Using masterPool instead of replicaPool to ensure we can read the token
-	// immediately after it is created, avoiding issues with replication lag.
-	err := s.masterPool.QueryRow(ctx, query, args...).Scan(
+	err := s.replicaPool.QueryRow(ctx, query, args...).Scan(
 		&tokenModel.UserID,
 		&tokenModel.AppID,
 		&tokenModel.Token,
@@ -95,13 +93,13 @@ func (s *Storage) RevokeToken(
 		args = append(args, token)
 	}
 
-	_, err := s.masterPool.Exec(ctx, query, args...)
+	tag, err := s.masterPool.Exec(ctx, query, args...)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
-		}
-
 		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenNotFound)
 	}
 
 	return nil

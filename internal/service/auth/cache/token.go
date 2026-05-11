@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/markosoft2000/auth/internal/domain/models"
@@ -53,7 +54,10 @@ func (c *tokenCache) RefreshToken(
 		}
 
 		go func() {
-			if err := c.cache.SaveRefreshToken(ctx, storedToken); err != nil {
+			ctxOp, OpCancel := context.WithTimeout(context.Background(), time.Second)
+			defer OpCancel()
+
+			if err := c.cache.SaveRefreshToken(ctxOp, storedToken); err != nil {
 				log.Error("failed to save token to cache", slog.Any("error", cacheErr))
 			}
 		}()
@@ -75,7 +79,10 @@ func (c *tokenCache) SaveRefreshToken(
 	nextErr := c.next.SaveRefreshToken(ctx, token)
 
 	go func() {
-		cacheErr := c.cache.SaveRefreshToken(ctx, token)
+		ctxOp, OpCancel := context.WithTimeout(context.Background(), time.Second)
+		defer OpCancel()
+
+		cacheErr := c.cache.SaveRefreshToken(ctxOp, token)
 		if cacheErr != nil {
 			log.Error("failed to save token to cache", slog.Any("error", cacheErr))
 		}

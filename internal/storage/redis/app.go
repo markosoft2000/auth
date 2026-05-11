@@ -43,6 +43,17 @@ func (s *Storage) App(ctx context.Context, appID uuid.UUID) (*models.App, error)
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
+	if err := s.client.Do(
+		ctxOp,
+		s.client.B().
+			Expire().
+			Key(key).
+			Seconds(int64(s.cfg.AppTTL.Seconds())).
+			Build(),
+	).Error(); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
 	return &models.App{
 		ID:     appID,
 		Secret: data,

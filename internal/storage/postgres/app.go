@@ -55,13 +55,13 @@ func (s *Storage) DeleteApp(ctx context.Context, appID uuid.UUID) error {
 
 	query := "DELETE FROM apps WHERE id = $1"
 
-	_, err := s.masterPool.Exec(ctx, query, appID)
+	tag, err := s.masterPool.Exec(ctx, query, appID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
-		}
-
 		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
 	}
 
 	return nil

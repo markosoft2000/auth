@@ -146,7 +146,7 @@ func (app *App) Stop(ctx context.Context) {
 	}
 	app.pgStorage.Stop()
 
-	app.log.Info("server stopped in ", slog.Duration("duration (ms)", time.Duration(time.Since(start).Milliseconds())))
+	app.log.Info("server stopped", slog.Duration("duration", time.Since(start)))
 }
 
 func newPGStorage(log *slog.Logger, cfg *config.PostgresConfig) *postgres.Storage {

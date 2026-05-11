@@ -79,6 +79,17 @@ func (s *Storage) RefreshToken(
 		return nil, fmt.Errorf("%s: unmarshaling: %w", op, err)
 	}
 
+	if err := s.client.Do(
+		ctxOp,
+		s.client.B().
+			Expire().
+			Key(key).
+			Seconds(int64(s.cfg.RefreshTokenTTL.Seconds())).
+			Build(),
+	).Error(); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
 	return storedToken, nil
 }
 

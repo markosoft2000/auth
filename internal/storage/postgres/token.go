@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/markosoft2000/auth/internal/domain/models"
 	"github.com/markosoft2000/auth/internal/storage"
 )
@@ -29,6 +31,11 @@ func (s *Storage) SaveRefreshToken(
 		token.IP_address,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return fmt.Errorf("%s: %w", op, storage.ErrRefreshTokenExits)
+		}
+
 		return fmt.Errorf("%s: %w", op, err)
 	}
 

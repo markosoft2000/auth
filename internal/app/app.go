@@ -42,6 +42,7 @@ func New(
 		cfg.Hasher.Parallelism,
 		cfg.Hasher.SaltLength,
 		cfg.Hasher.KeyLength,
+		cfg.Hasher.WorkerLimit,
 	)
 
 	cipher := gcmCipher.New(cfg.MasterSecret)

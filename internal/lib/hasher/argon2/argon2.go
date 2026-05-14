@@ -1,13 +1,16 @@
 package argon2
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/sync/semaphore"
 )
 
 type ArgonHasher struct {
@@ -16,78 +19,150 @@ type ArgonHasher struct {
 	parallelism uint8
 	saltLength  uint32
 	keyLength   uint32
+	sem         *semaphore.Weighted
 }
 
-func New(memory, iterations uint32, parallelism uint8, saltLength, keyLength uint32) *ArgonHasher {
+func New(
+	memory, iterations uint32,
+	parallelism uint8,
+	saltLength, keyLength uint32,
+	workerLimit uint64,
+) *ArgonHasher {
 	return &ArgonHasher{
 		memory:      memory,
 		iterations:  iterations,
 		parallelism: parallelism,
 		saltLength:  saltLength,
 		keyLength:   keyLength,
+		sem:         semaphore.NewWeighted(int64(workerLimit)),
 	}
 }
 
 // HashPassword creates a PHC-formatted string containing the salt and parameters.
-func (a *ArgonHasher) HashPassword(password string) (string, error) {
+func (a *ArgonHasher) HashPassword(ctx context.Context, password string) (string, error) {
+	op := "argon2.HashPassword"
+
+	if err := a.sem.Acquire(ctx, 1); err != nil {
+		return "", fmt.Errorf("%s: Failed to acquire semaphore: %w", op, err)
+	}
+
+	defer a.sem.Release(1)
+
 	salt := make([]byte, a.saltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
 
-	hash := argon2.IDKey(
-		[]byte(password),
-		salt,
-		a.iterations,
-		a.memory,
-		a.parallelism,
-		a.keyLength,
-	)
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case hash := <-uninterruptedCall(ctx, func() []byte {
+		return argon2.IDKey(
+			[]byte(password),
+			salt,
+			a.iterations,
+			a.memory,
+			a.parallelism,
+			a.keyLength,
+		)
+	}):
+		// Format: $argon2id$v=19$m=65536,t=3,p=2$salt$hash
+		b64Salt := base64.RawStdEncoding.EncodeToString(salt)
+		b64Hash := base64.RawStdEncoding.EncodeToString(hash)
 
-	// Format: $argon2id$v=19$m=65536,t=3,p=2$salt$hash
-	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
-	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
+		encodedHash := fmt.Sprintf(
+			"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+			argon2.Version, a.memory, a.iterations, a.parallelism, b64Salt, b64Hash,
+		)
 
-	encodedHash := fmt.Sprintf(
-		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-		argon2.Version, a.memory, a.iterations, a.parallelism, b64Salt, b64Hash,
-	)
-
-	return encodedHash, nil
+		return encodedHash, nil
+	}
 }
 
 // ComparePassword parses the encoded hash to verify a password against it.
-func (a *ArgonHasher) ComparePassword(encodedHash, password string) bool {
+func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password string) (bool, error) {
+	op := "argon2.ComparePassword"
+
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 {
-		return false
+		return false, fmt.Errorf("%s: %w", op, errors.New("hash splitting failed"))
+	}
+
+	expectedSaltB64Len := base64.RawStdEncoding.EncodedLen(int(a.saltLength))
+	expectedKeyB64Len := base64.RawStdEncoding.EncodedLen(int(a.keyLength))
+
+	if len(parts[4]) != expectedSaltB64Len {
+		return false, fmt.Errorf("%s: invalid salt length (%d)", op, len(parts[4]))
+	}
+	if len(parts[5]) != expectedKeyB64Len {
+		return false, fmt.Errorf("%s: invalid hash key length (%d)", op, len(parts[5]))
 	}
 
 	var memory, iterations uint32
 	var parallelism uint8
-	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
-	if err != nil {
-		return false
+	params := parts[3]
+
+	mIdx := strings.Index(params, "m=")
+	tIdx := strings.Index(params, "t=")
+	pIdx := strings.Index(params, "p=")
+	if mIdx == -1 || tIdx == -1 || pIdx == -1 {
+		return false, fmt.Errorf("%s: invalid format metrics profile parameters for hasher", op)
 	}
 
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	fmt.Sscanf(params, "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
+
+	var saltBuf [16]byte
+	var decodedHashBuf [32]byte
+
+	saltStr := parts[4]
+	_, err := base64.RawStdEncoding.Decode(saltBuf[:], []byte(saltStr))
 	if err != nil {
-		return false
+		return false, fmt.Errorf("%s: decode salt failed: %w", op, err)
 	}
 
-	decodedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	hashStr := parts[5]
+	_, err = base64.RawStdEncoding.Decode(decodedHashBuf[:], []byte(hashStr))
 	if err != nil {
-		return false
+		return false, fmt.Errorf("%s: decode hash failed: %w", op, err)
 	}
 
-	comparisonHash := argon2.IDKey(
-		[]byte(password),
-		salt,
-		iterations,
-		memory,
-		parallelism,
-		uint32(len(decodedHash)),
-	)
+	if err := a.sem.Acquire(ctx, 1); err != nil {
+		return false, fmt.Errorf("%s: Failed to acquire semaphore: %w", op, err)
+	}
 
-	return subtle.ConstantTimeCompare(decodedHash, comparisonHash) == 1
+	defer a.sem.Release(1)
+
+	select {
+	case comparisonHash := <-uninterruptedCall(ctx, func() []byte {
+		return argon2.IDKey(
+			[]byte(password),
+			saltBuf[:],
+			iterations,
+			memory,
+			parallelism,
+			uint32(len(decodedHashBuf)),
+		)
+	}):
+		return subtle.ConstantTimeCompare(decodedHashBuf[:], comparisonHash) == 1, nil
+
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+}
+
+// uninterruptedCall fuc is a wrapper for calls without ctx (slow, long calls)
+func uninterruptedCall(ctx context.Context, f func() []byte) chan []byte {
+	ch := make(chan []byte, 1)
+
+	go func() {
+		defer close(ch)
+
+		select {
+		case ch <- f():
+		case <-ctx.Done():
+			return
+		}
+	}()
+
+	return ch
 }

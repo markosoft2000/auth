@@ -10,4 +10,5 @@ var (
 	ErrAppExists            = errors.New("app already exists")
 	ErrAppNotFound          = errors.New("app not found")
 	ErrRefreshTokenNotFound = errors.New("refresh token not found")
+	ErrRefreshTokenExits    = errors.New("refresh token already exists")
 )

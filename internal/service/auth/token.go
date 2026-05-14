@@ -147,7 +147,7 @@ func (a *Auth) RefreshToken(
 				ExpiresAt:  time.Now().Add(a.refreshTokenTTL),
 			},
 		)
-		if err != nil {
+		if err != nil && !errors.Is(err, storage.ErrRefreshTokenExits) {
 			log.Error("failed to save refresh token", slog.Any("error", err))
 
 			return "", "", fmt.Errorf("%s: %w", op, err)

@@ -11,8 +11,8 @@ import (
 )
 
 type Hasher interface {
-	HashPassword(password string) (string, error)
-	ComparePassword(hash, password string) bool
+	HashPassword(ctx context.Context, password string) (string, error)
+	ComparePassword(ctx context.Context, hash, password string) (bool, error)
 }
 
 type Cipher interface {

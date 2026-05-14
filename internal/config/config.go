@@ -44,6 +44,7 @@ type HasherConfig struct {
 	Parallelism uint8  `yaml:"parallelism" env-default:"2"`
 	SaltLength  uint32 `yaml:"salt_length" env-default:"16"`
 	KeyLength   uint32 `yaml:"key_length" env-default:"32"`
+	WorkerLimit uint64 `yaml:"worker_limit" env-default:"16"`
 }
 
 type PostgresConfig struct {

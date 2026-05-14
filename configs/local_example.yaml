@@ -14,10 +14,11 @@ reissue_refresh_token_ttl: 24h
 master_secret: "master_secret"
 hasher:
   memory: 65536
-  iterations: 3
-  parallelism: 2
+  iterations: 2
+  parallelism: 1
   salt_length: 16
   key_length: 32
+  worker_limit: 4 #num of hashing workers = num cores (consider 'parallelism' param)
 postgres:
   direct:
     host: "db"

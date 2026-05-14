@@ -27,9 +27,13 @@ func New(masterPoolCfg, replicaPoolCfg *Config) (*Storage, error) {
 		return nil, err
 	}
 
-	roPool, err := createPool(replicaPoolCfg)
-	if err != nil {
-		return nil, err
+	roPool := rwPool
+
+	if replicaPoolCfg.Host != "" {
+		roPool, err = createPool(replicaPoolCfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Storage{

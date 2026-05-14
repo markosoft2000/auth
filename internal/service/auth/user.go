@@ -39,7 +39,7 @@ func (a *Auth) RegisterNewUser(
 
 	log.Info("registering new user")
 
-	passHash, err := a.hasher.HashPassword(pass)
+	passHash, err := a.hasher.HashPassword(ctx, pass)
 	if err != nil {
 		log.Error("failed to hash password", slog.Any("error", err.Error()))
 
@@ -114,7 +114,13 @@ func (a *Auth) Login(
 		return "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	if !a.hasher.ComparePassword(user.PassHash, password) {
+	equal, err := a.hasher.ComparePassword(ctx, user.PassHash, password)
+	if err != nil {
+		log.Error("failed to compare hash password", slog.Any("error", err.Error()))
+
+		return "", "", fmt.Errorf("%s: %w", op, err)
+	}
+	if !equal {
 		log.Warn("invalid credentials", slog.String("email", email))
 
 		return "", "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
@@ -171,7 +177,7 @@ func (a *Auth) Login(
 			ExpiresAt:  time.Now().Add(a.refreshTokenTTL),
 		},
 	)
-	if err != nil {
+	if err != nil && !errors.Is(err, storage.ErrRefreshTokenExits) {
 		log.Error("failed to save refresh token", slog.Any("error", err))
 
 		return "", "", fmt.Errorf("%s: %w", op, err)

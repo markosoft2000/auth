@@ -53,30 +53,25 @@ func (a *ArgonHasher) HashPassword(ctx context.Context, password string) (string
 		return "", err
 	}
 
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case hash := <-uninterruptedCall(ctx, func() []byte {
-		return argon2.IDKey(
-			[]byte(password),
-			salt,
-			a.iterations,
-			a.memory,
-			a.parallelism,
-			a.keyLength,
-		)
-	}):
-		// Format: $argon2id$v=19$m=65536,t=3,p=2$salt$hash
-		b64Salt := base64.RawStdEncoding.EncodeToString(salt)
-		b64Hash := base64.RawStdEncoding.EncodeToString(hash)
+	hash := argon2.IDKey(
+		[]byte(password),
+		salt,
+		a.iterations,
+		a.memory,
+		a.parallelism,
+		a.keyLength,
+	)
 
-		encodedHash := fmt.Sprintf(
-			"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-			argon2.Version, a.memory, a.iterations, a.parallelism, b64Salt, b64Hash,
-		)
+	// Format: $argon2id$v=19$m=65536,t=3,p=2$salt$hash
+	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
+	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
 
-		return encodedHash, nil
-	}
+	encodedHash := fmt.Sprintf(
+		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+		argon2.Version, a.memory, a.iterations, a.parallelism, b64Salt, b64Hash,
+	)
+
+	return encodedHash, nil
 }
 
 // ComparePassword parses the encoded hash to verify a password against it.
@@ -88,13 +83,10 @@ func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password
 		return false, fmt.Errorf("%s: %w", op, errors.New("hash splitting failed"))
 	}
 
-	expectedSaltB64Len := base64.RawStdEncoding.EncodedLen(int(a.saltLength))
-	expectedKeyB64Len := base64.RawStdEncoding.EncodedLen(int(a.keyLength))
-
-	if len(parts[4]) != expectedSaltB64Len {
+	if len(parts[4]) != base64.RawStdEncoding.EncodedLen(int(a.saltLength)) {
 		return false, fmt.Errorf("%s: invalid salt length (%d)", op, len(parts[4]))
 	}
-	if len(parts[5]) != expectedKeyB64Len {
+	if len(parts[5]) != base64.RawStdEncoding.EncodedLen(int(a.keyLength)) {
 		return false, fmt.Errorf("%s: invalid hash key length (%d)", op, len(parts[5]))
 	}
 
@@ -109,13 +101,16 @@ func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password
 		return false, fmt.Errorf("%s: invalid format metrics profile parameters for hasher", op)
 	}
 
-	fmt.Sscanf(params, "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
+	_, err := fmt.Sscanf(params, "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
 
-	var saltBuf [16]byte
-	var decodedHashBuf [32]byte
+	saltBuf := make([]byte, a.saltLength)
+	decodedHashBuf := make([]byte, a.keyLength)
 
 	saltStr := parts[4]
-	_, err := base64.RawStdEncoding.Decode(saltBuf[:], []byte(saltStr))
+	_, err = base64.RawStdEncoding.Decode(saltBuf[:], []byte(saltStr))
 	if err != nil {
 		return false, fmt.Errorf("%s: decode salt failed: %w", op, err)
 	}
@@ -132,37 +127,14 @@ func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password
 
 	defer a.sem.Release(1)
 
-	select {
-	case comparisonHash := <-uninterruptedCall(ctx, func() []byte {
-		return argon2.IDKey(
-			[]byte(password),
-			saltBuf[:],
-			iterations,
-			memory,
-			parallelism,
-			uint32(len(decodedHashBuf)),
-		)
-	}):
-		return subtle.ConstantTimeCompare(decodedHashBuf[:], comparisonHash) == 1, nil
+	comparisonHash := argon2.IDKey(
+		[]byte(password),
+		saltBuf[:],
+		iterations,
+		memory,
+		parallelism,
+		uint32(len(decodedHashBuf)),
+	)
 
-	case <-ctx.Done():
-		return false, ctx.Err()
-	}
-}
-
-// uninterruptedCall fuc is a wrapper for calls without ctx (slow, long calls)
-func uninterruptedCall(ctx context.Context, f func() []byte) chan []byte {
-	ch := make(chan []byte, 1)
-
-	go func() {
-		defer close(ch)
-
-		select {
-		case ch <- f():
-		case <-ctx.Done():
-			return
-		}
-	}()
-
-	return ch
+	return subtle.ConstantTimeCompare(decodedHashBuf[:], comparisonHash) == 1, nil
 }

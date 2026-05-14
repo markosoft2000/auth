@@ -7,7 +7,9 @@ import (
 	"net"
 	"time"
 
+	"github.com/markosoft2000/auth/internal/config"
 	authgrpc "github.com/markosoft2000/auth/internal/grpc/auth"
+	"github.com/markosoft2000/auth/internal/grpc/interceptors"
 	"github.com/markosoft2000/auth/internal/grpc/interceptors/validator"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
@@ -35,7 +37,7 @@ type App struct {
 
 func New(
 	log *slog.Logger,
-	port int,
+	cfg config.GRPCConfig,
 	authService authgrpc.Auth,
 	dbPinger Pinger,
 	pubsubPinger Pinger,
@@ -46,6 +48,11 @@ func New(
 		),
 	}
 
+	limiter := interceptors.NewSplitLimiter(
+		cfg.RateLimiter.HeavyRate, cfg.RateLimiter.HeavyBurst,
+		cfg.RateLimiter.LightRate, cfg.RateLimiter.LightBurst,
+	)
+
 	recoveryOpts := []recovery.Option{
 		recovery.WithRecoveryHandler(func(p any) (err error) {
 			log.Error("Recovered from panic", slog.Any("panic", p))
@@ -54,11 +61,14 @@ func New(
 		}),
 	}
 
-	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		recovery.UnaryServerInterceptor(recoveryOpts...),
-		logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
-		validator.UnaryServerInterceptor(log),
-	))
+	gRPCServer := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			recovery.UnaryServerInterceptor(recoveryOpts...),
+			logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
+			limiter.UnaryServerInterceptor(),
+			validator.UnaryServerInterceptor(log),
+		),
+	)
 
 	healthSrv := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(gRPCServer, healthSrv)
@@ -68,7 +78,7 @@ func New(
 	return &App{
 		log:               log,
 		gRPCServer:        gRPCServer,
-		port:              port,
+		port:              cfg.Port,
 		healthSrv:         healthSrv,
 		dbPinger:          dbPinger,
 		pubsubPinger:      pubsubPinger,

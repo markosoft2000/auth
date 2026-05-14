@@ -34,8 +34,16 @@ type HTTPServerConfig struct {
 }
 
 type GRPCConfig struct {
-	Port    int           `yaml:"port"`
-	Timeout time.Duration `yaml:"timeout"`
+	Port        int               `yaml:"port"`
+	Timeout     time.Duration     `yaml:"timeout"`
+	RateLimiter RateLimiterConfig `yaml:"rate_limiter"`
+}
+
+type RateLimiterConfig struct {
+	HeavyRate  int `yaml:"heavy_rate" env-default:"25"`
+	HeavyBurst int `yaml:"heavy_burst" env-default:"8"`
+	LightRate  int `yaml:"light_rate" env-default:"10"`
+	LightBurst int `yaml:"light_burst" env-default:"4"`
 }
 
 type HasherConfig struct {

@@ -88,7 +88,7 @@ func New(
 	}
 
 	authService := auth.New(log, authCfg, hasher, cipher, storage, pubsub)
-	grpcApp := grpcapp.New(log, cfg.GRPC.Port, authService, pgStorage, pubsub)
+	grpcApp := grpcapp.New(log, cfg.GRPC, authService, pgStorage, pubsub)
 
 	// HTTP Server Configuration
 	r := routes.NewRouter(log, cfg.HTTPServer.Timeout, pgStorage)

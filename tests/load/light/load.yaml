@@ -15,7 +15,8 @@ pools:
       - duration: 10s
         type: line
         from: 1
-        to: 100
+        to: 8000
     startup:
       - type: once
-        times: 100
+        times: 1000
+    discard_overflow: true  # True drops backed up ammo instances into 'discarded/777' locally

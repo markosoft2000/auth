@@ -1,4 +1,4 @@
-package argon2
+package tests
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func TestUninterruptedCall(t *testing.T) {
 	wg.Add(1)
 
 	select {
-	case res := <-uninterruptedCall(ctx, func() []byte {
+	case res := <-uninterruptedCall[[]byte](ctx, func() []byte {
 		defer wg.Done()
 
 		time.Sleep(time.Second * 2)
@@ -35,4 +35,21 @@ func TestUninterruptedCall(t *testing.T) {
 		wg.Wait()
 		return
 	}
+}
+
+// uninterruptedCall fuc is a wrapper for calls without ctx (slow, long calls)
+func uninterruptedCall[T any](ctx context.Context, f func() T) <-chan T {
+	ch := make(chan T, 1)
+
+	go func() {
+		defer close(ch)
+
+		select {
+		case ch <- f():
+		case <-ctx.Done():
+			return
+		}
+	}()
+
+	return ch
 }

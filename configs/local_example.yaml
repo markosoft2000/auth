@@ -8,6 +8,11 @@ http_server:
 grpc:
   port: 50001
   timeout: 5s
+  rate_limiter:
+    heavy_rate: 25
+    heavy_burst: 8
+    light_rate: 15000
+    light_burst: 3000
 token_ttl: 15m
 refresh_token_ttl: 720h
 reissue_refresh_token_ttl: 24h

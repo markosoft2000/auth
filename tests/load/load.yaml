@@ -1,0 +1,21 @@
+pools:
+  - id: gRPC Load Pool
+    gun:
+      type: grpc_gun              # Ensure this matches register.Gun() precisely
+      target: "localhost:50001"
+    ammo:
+      type: json_ammo
+      source:                   # <-- Natively required structural nesting
+        type: file              # <-- Data source type identification
+        path: "./ammo.json"
+    result:
+      type: phout
+      destination: ./phout.log
+    rps:
+      - duration: 10s
+        type: line
+        from: 1
+        to: 100
+    startup:
+      - type: once
+        times: 100

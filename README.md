@@ -10,7 +10,7 @@ A high-performance, production-ready authentication service is designed as a gRP
     - **Encryption**: Employs **AES-GCM** (Galois/Counter Mode) to encrypt sensitive data (like app-specific secrets) before storing them in the database.
     - **JWT EdDSA**: Uses asymmetric signing (Ed25519) for tokens, providing better security and performance with smaller keys compared to RSA.
 3. **High Availability Storage**:
-    - **PostgreSQL**: Configured with a strategy for Master/Replica separation (via HAProxy/PgBouncer comments in the code) to avoid single points of failure.
+    - **PostgreSQL**: Configured with a strategy for Master/Replica separation (via HAProxy/PgBouncer to avoid single points of failure) or use Google Cloud (Spanner) / AWS.
     - **Redis Cluster**: Uses a 6-node Redis cluster for high-performance caching of application metadata and session tokens.
 4. **Observability**:
     - **Prometheus**: Exports metrics via an HTTP `/metrics` endpoint.

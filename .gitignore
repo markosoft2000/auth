@@ -12,3 +12,4 @@ vendor/
 proto/sso/buf/
 proto/sso/vendor/
 pkg/
+tests/load/phout.log

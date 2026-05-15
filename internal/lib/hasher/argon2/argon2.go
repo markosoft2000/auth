@@ -8,18 +8,20 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/sync/semaphore"
 )
 
 type ArgonHasher struct {
-	memory      uint32
-	iterations  uint32
-	parallelism uint8
-	saltLength  uint32
-	keyLength   uint32
-	sem         *semaphore.Weighted
+	memory         uint32
+	iterations     uint32
+	parallelism    uint8
+	saltLength     uint32
+	keyLength      uint32
+	sem            *semaphore.Weighted
+	byteBufferPool sync.Pool
 }
 
 func New(
@@ -28,6 +30,11 @@ func New(
 	saltLength, keyLength uint32,
 	workerLimit uint64,
 ) *ArgonHasher {
+	maxBufferCapacity := keyLength
+	if saltLength > maxBufferCapacity {
+		maxBufferCapacity = saltLength
+	}
+
 	return &ArgonHasher{
 		memory:      memory,
 		iterations:  iterations,
@@ -35,6 +42,12 @@ func New(
 		saltLength:  saltLength,
 		keyLength:   keyLength,
 		sem:         semaphore.NewWeighted(int64(workerLimit)),
+		byteBufferPool: sync.Pool{
+			New: func() any {
+				b := make([]byte, maxBufferCapacity)
+				return &b // Pool pointers to arrays to avoid interface allocation overhead on Put/Get
+			},
+		},
 	}
 }
 
@@ -48,7 +61,11 @@ func (a *ArgonHasher) HashPassword(ctx context.Context, password string) (string
 
 	defer a.sem.Release(1)
 
-	salt := make([]byte, a.saltLength)
+	saltBufPtr := a.byteBufferPool.Get().(*[]byte)
+	defer a.byteBufferPool.Put(saltBufPtr)
+
+	salt := (*saltBufPtr)[:a.saltLength]
+
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
@@ -92,31 +109,33 @@ func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password
 
 	var memory, iterations uint32
 	var parallelism uint8
-	params := parts[3]
 
-	mIdx := strings.Index(params, "m=")
-	tIdx := strings.Index(params, "t=")
-	pIdx := strings.Index(params, "p=")
+	mIdx := strings.Index(parts[3], "m=")
+	tIdx := strings.Index(parts[3], "t=")
+	pIdx := strings.Index(parts[3], "p=")
 	if mIdx == -1 || tIdx == -1 || pIdx == -1 {
-		return false, fmt.Errorf("%s: invalid format metrics profile parameters for hasher", op)
+		return false, fmt.Errorf("%s: invalid format of parameters for hash", op)
 	}
 
-	_, err := fmt.Sscanf(params, "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
+	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
-	saltBuf := make([]byte, a.saltLength)
-	decodedHashBuf := make([]byte, a.keyLength)
+	saltBufPtr := a.byteBufferPool.Get().(*[]byte)
+	defer a.byteBufferPool.Put(saltBufPtr)
+	saltBuf := (*saltBufPtr)[:a.saltLength]
 
-	saltStr := parts[4]
-	_, err = base64.RawStdEncoding.Decode(saltBuf[:], []byte(saltStr))
+	_, err = base64.RawStdEncoding.Decode(saltBuf[:], []byte(parts[4]))
 	if err != nil {
 		return false, fmt.Errorf("%s: decode salt failed: %w", op, err)
 	}
 
-	hashStr := parts[5]
-	_, err = base64.RawStdEncoding.Decode(decodedHashBuf[:], []byte(hashStr))
+	keyBufPtr := a.byteBufferPool.Get().(*[]byte)
+	defer a.byteBufferPool.Put(keyBufPtr)
+	decodedHashBuf := (*keyBufPtr)[:a.keyLength]
+
+	_, err = base64.RawStdEncoding.Decode(decodedHashBuf[:], []byte(parts[5]))
 	if err != nil {
 		return false, fmt.Errorf("%s: decode hash failed: %w", op, err)
 	}

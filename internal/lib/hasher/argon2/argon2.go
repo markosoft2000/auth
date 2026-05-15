@@ -15,13 +15,13 @@ import (
 )
 
 type ArgonHasher struct {
+	byteBufferPool sync.Pool
+	sem            *semaphore.Weighted
 	memory         uint32
 	iterations     uint32
-	parallelism    uint8
 	saltLength     uint32
 	keyLength      uint32
-	sem            *semaphore.Weighted
-	byteBufferPool sync.Pool
+	parallelism    uint8
 }
 
 func New(
@@ -68,6 +68,13 @@ func (a *ArgonHasher) HashPassword(ctx context.Context, password string) (string
 
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
+	}
+
+	// to ensure ctx is still "alive" and we can proceed to hashing section
+	select {
+	case <-ctx.Done():
+		return "", fmt.Errorf("%s: %w", op, ctx.Err())
+	default:
 	}
 
 	hash := argon2.IDKey(
@@ -126,7 +133,7 @@ func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password
 	defer a.byteBufferPool.Put(saltBufPtr)
 	saltBuf := (*saltBufPtr)[:a.saltLength]
 
-	_, err = base64.RawStdEncoding.Decode(saltBuf[:], []byte(parts[4]))
+	_, err = base64.RawStdEncoding.Decode(saltBuf, []byte(parts[4]))
 	if err != nil {
 		return false, fmt.Errorf("%s: decode salt failed: %w", op, err)
 	}
@@ -135,7 +142,7 @@ func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password
 	defer a.byteBufferPool.Put(keyBufPtr)
 	decodedHashBuf := (*keyBufPtr)[:a.keyLength]
 
-	_, err = base64.RawStdEncoding.Decode(decodedHashBuf[:], []byte(parts[5]))
+	_, err = base64.RawStdEncoding.Decode(decodedHashBuf, []byte(parts[5]))
 	if err != nil {
 		return false, fmt.Errorf("%s: decode hash failed: %w", op, err)
 	}
@@ -145,6 +152,13 @@ func (a *ArgonHasher) ComparePassword(ctx context.Context, encodedHash, password
 	}
 
 	defer a.sem.Release(1)
+
+	// to ensure ctx is still "alive" and we can proceed to hashing section
+	select {
+	case <-ctx.Done():
+		return false, fmt.Errorf("%s: %w", op, ctx.Err())
+	default:
+	}
 
 	comparisonHash := argon2.IDKey(
 		[]byte(password),

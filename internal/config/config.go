@@ -11,18 +11,18 @@ import (
 )
 
 type Config struct {
-	Postgres               PostgresConfig   `yaml:"postgres"`
-	Kafka                  KafkaConfig      `yaml:"kafka"`
 	Env                    string           `yaml:"env" env:"ENV" env-default:"local"`
 	MasterSecret           string           `yaml:"master_secret"`
+	Postgres               PostgresConfig   `yaml:"postgres"`
 	Redis                  RedisConfig      `yaml:"redis"`
 	HTTPServer             HTTPServerConfig `yaml:"http_server"`
-	Caching                CachingConfig    `yaml:"caching"`
+	Kafka                  KafkaConfig      `yaml:"kafka"`
 	GRPC                   GRPCConfig       `yaml:"grpc"`
+	Hasher                 HasherConfig     `yaml:"hasher"`
+	Caching                CachingConfig    `yaml:"caching"`
 	TokenTTL               time.Duration    `yaml:"token_ttl" env-default:"1h"`
 	RefreshTokenTTL        time.Duration    `yaml:"refresh_token_ttl" env-default:"720h"`
 	ReissueRefreshTokenTTL time.Duration    `yaml:"reissue_refresh_token_ttl" env-default:"24h"`
-	Hasher                 HasherConfig     `yaml:"hasher"`
 }
 
 type HTTPServerConfig struct {

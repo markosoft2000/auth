@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"buf.build/go/protovalidate"
@@ -11,17 +12,28 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// UnaryServerInterceptor returns a new unary server interceptor that validates messages.
-func UnaryServerInterceptor(l *slog.Logger) grpc.UnaryServerInterceptor {
-	const op = "grpc_auth.validator.interceptor"
+type ValidationInterceptor struct {
+	v   protovalidate.Validator
+	log *slog.Logger
+}
 
-	log := l.With(slog.String("op", op))
+// NewInterceptor compiles and caches validation rules ONCE at server boot
+func NewInterceptor(l *slog.Logger) (*ValidationInterceptor, error) {
+	const op = "grpc_auth.validator.interceptor"
 
 	v, err := protovalidate.New()
 	if err != nil {
-		panic("failed to initialize validator: " + err.Error())
+		return nil, fmt.Errorf("%s: failed to initialize validator: %w", op, err)
 	}
 
+	return &ValidationInterceptor{
+		v:   v,
+		log: l.With(slog.String("op", op)),
+	}, nil
+}
+
+// UnaryServerInterceptor runs stateless, fast CEL validations on hot path request streams
+func (in *ValidationInterceptor) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req any,
@@ -33,8 +45,8 @@ func UnaryServerInterceptor(l *slog.Logger) grpc.UnaryServerInterceptor {
 			return handler(ctx, req)
 		}
 
-		if err := v.Validate(msg); err != nil {
-			log.Warn("request validation failed",
+		if err := in.v.Validate(msg); err != nil {
+			in.log.Warn("request validation failed",
 				slog.String("method", info.FullMethod),
 				slog.Any("error", err),
 			)

@@ -61,12 +61,17 @@ func New(
 		}),
 	}
 
+	valInterceptor, err := validator.NewInterceptor(log)
+	if err != nil {
+		panic(err)
+	}
+
 	gRPCServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			recovery.UnaryServerInterceptor(recoveryOpts...),
 			logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
 			limiter.UnaryServerInterceptor(),
-			validator.UnaryServerInterceptor(log),
+			valInterceptor.UnaryServerInterceptor(),
 		),
 	)
 

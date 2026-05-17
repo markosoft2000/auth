@@ -39,7 +39,7 @@ message RegisterRequest {
 }
 
 message RegisterResponse {
-  string user_id = 1;
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
 message LoginRequest {
@@ -72,7 +72,7 @@ message LoginResponse {
 }
 
 message LogoutRequest {
-  string user_id = 1 [(buf.validate.field).string.len = 36];
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
   string app_id = 2 [(buf.validate.field).string.len = 36];
   bool all_app = 3;
 }
@@ -82,7 +82,7 @@ message LogoutResponse {
 }
 
 message IsAdminRequest {
-  string user_id = 1 [(buf.validate.field).string.len = 36];
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
 message IsAdminResponse {
